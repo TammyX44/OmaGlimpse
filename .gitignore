@@ -1,0 +1,11 @@
+# Compiled QML
+*.qmlc
+*.jsc
+
+# User config (contains personal positions/preferences)
+tammy-widgets.json
+
+# Editor
+*.swp
+*.swo
+*~

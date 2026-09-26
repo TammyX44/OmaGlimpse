@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "tammy.widgets",
+  "name": "OmaWidgets",
+  "version": "3.0.0",
+  "author": "TammyX44",
+  "license": "MIT",
+  "description": "Theme-aware desktop widgets for Omarchy with system stats, battery and power profiles, media controls, processes, disks, network speed, and temperatures.",
+  "kinds": ["overlay", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Widgets.qml",
+    "barWidget": "SettingsButton.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaWidgets Settings",
+    "description": "Opens the desktop widgets settings panel",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "tags": ["desktop", "monitor", "widgets", "system", "customizable"]
+}
