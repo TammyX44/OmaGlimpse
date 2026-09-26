@@ -8,14 +8,14 @@ import qs.Ui
 // Uses BarIconButton for consistent Omarchy bar styling.
 BarWidget {
   id: root
-  moduleName: "io.github.tammyx44.omawidgets"
+  moduleName: "io.github.tammyx44.omaglimpse"
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   Process {
     id: ipcCall
-    command: ["qs", "ipc", "--path", "/usr/share/omarchy/shell", "call", "io.github.tammyx44.omawidgets", "openSettings"]
+    command: ["qs", "ipc", "--path", "/usr/share/omarchy/shell", "call", "io.github.tammyx44.omaglimpse", "openSettings"]
   }
 
   BarIconButton {

@@ -89,7 +89,7 @@ def image_kind(data):
 
 
 def private_cache_dir():
-    base = Path(tempfile.gettempdir()) / f"omawidgets-art-{os.getuid()}"
+    base = Path(tempfile.gettempdir()) / f"omaglimpse-art-{os.getuid()}"
     try:
         base.mkdir(mode=0o700)
     except FileExistsError:

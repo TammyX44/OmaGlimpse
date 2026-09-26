@@ -31,7 +31,7 @@ PanelWindow {
   visible: false
   color: "transparent"
   exclusionMode: ExclusionMode.Ignore
-  WlrLayershell.namespace: "io.github.tammyx44.omawidgets.menu"
+  WlrLayershell.namespace: "io.github.tammyx44.omaglimpse.menu"
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: menu.visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 

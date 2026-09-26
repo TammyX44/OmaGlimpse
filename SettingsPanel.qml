@@ -155,7 +155,7 @@ PanelWindow {
   visible: false
   color: "transparent"
   exclusionMode: ExclusionMode.Ignore
-  WlrLayershell.namespace: "io.github.tammyx44.omawidgets.settings"
+  WlrLayershell.namespace: "io.github.tammyx44.omaglimpse.settings"
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: panel.visible
     ? WlrKeyboardFocus.Exclusive

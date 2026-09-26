@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.tammyx44.omawidgets",
-  "name": "OmaWidgets",
+  "id": "io.github.tammyx44.omaglimpse",
+  "name": "OmaGlimpse",
   "version": "3.0.0",
   "author": "TammyX44",
   "license": "MIT",
@@ -13,7 +13,7 @@
     "barWidget": "SettingsButton.qml"
   },
   "barWidget": {
-    "displayName": "OmaWidgets Settings",
+    "displayName": "OmaGlimpse Settings",
     "description": "Opens the desktop widgets settings panel",
     "category": "System",
     "allowMultiple": false,
