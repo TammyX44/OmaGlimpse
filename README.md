@@ -36,6 +36,7 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 | `*Widget.qml`, `SystemMonitor.qml`, `Temperature.qml`, `TopProcesses.qml`, `NetworkSpeed.qml`, `DiskUsage.qml` | Render the seven live cards and read their data sources. |
 | `SettingsPanel.qml`, `WidgetDropdown.qml`, `WidgetContextMenu.qml`, `SettingsButton.qml` | Provide the settings panel, per-card controls, context menu, and bar button. |
 | `WidgetConfig.js`, `WidgetModel.js`, `WidgetTheme.js`, `CircularGauge.qml`, `CompactToggle.qml` | Validate preferences, parse readings, follow theme colors, and share UI controls. |
+| `ArtworkPlaceholder.qml`, `fetch_album_art.py` | Draw a theme-matched media placeholder and safely fetch bounded remote cover images. |
 | `tests/`, `.github/workflows/` | Check widget behavior and manifest validity locally and in CI. |
 | `assets/`, `preview.png` | Hold the approved screenshots, demo video, and marketplace preview. |
 
@@ -44,6 +45,7 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 - Omarchy with the Quickshell-based `omarchy-shell` and its plugin commands.
 - Standard Linux `/proc` and `/sys` interfaces and system utilities (`ps`, `df`, and a POSIX shell) for system, process, disk, network, and sensor readings.
 - Optional: UPower for battery status and energy flow; an MPRIS-capable player for media controls; `nvidia-smi` or `rocm-smi` for supported GPU readings. Some GPU and temperature readings can also come from readable `/sys` interfaces.
+- Optional: Python 3 and curl 8.4+ for size- and time-limited HTTPS album-cover downloads. Local covers and the theme-matched fallback work without them.
 - Optional: `powerprofilesctl` and a supported power-profile driver for profile detection and switching. The profile buttons call Omarchy's `omarchy-powerprofiles-set` command, which also remembers the selection in the user's Omarchy state directory.
 
 Unavailable hardware readings are hidden or shown as unavailable. The plugin does not install extra packages or request elevated privileges.
@@ -53,6 +55,8 @@ Unavailable hardware readings are hidden or shown as unavailable. The plugin doe
 ```bash
 omarchy plugin add https://github.com/TammyX44/OmaWidgets.git --enable
 ```
+
+If you installed an earlier development build, remove or disable it before adding this release to avoid duplicate cards. Your saved widget settings remain in a separate JSON file.
 
 The plugin adds a settings button to the Omarchy bar (right section by default).
 

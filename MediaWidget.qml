@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Ui
@@ -122,6 +123,76 @@ BorderSurface {
   readonly property string artist: activePlayer ? (activePlayer.trackArtist || "") : ""
   readonly property string album: activePlayer && activePlayer.trackAlbum ? activePlayer.trackAlbum : ""
   readonly property string artUrl: activePlayer && activePlayer.trackArtUrl ? activePlayer.trackArtUrl : ""
+  readonly property string artworkRequestKey: root.playerKey(root.activePlayer) + "\n"
+    + root.title + "\n" + root.artist + "\n" + root.album + "\n" + root.artUrl
+  property string artworkSource: ""
+  property var artworkProcess: null
+
+  function refreshArtwork() {
+    if (root.artworkProcess) {
+      root.artworkProcess.running = false
+      root.artworkProcess.destroy()
+      root.artworkProcess = null
+    }
+    root.artworkSource = ""
+    if (!root.showAlbumArt || !root.hasMedia) return
+
+    var url = String(root.artUrl)
+    if ((url.startsWith("/") && !url.startsWith("//"))
+        || /^file:\/\/\/[^\/\\]/i.test(url)) {
+      root.artworkSource = url
+      return
+    }
+    if (!/^https:\/\//i.test(url)) return
+
+    var helper = decodeURIComponent(String(Qt.resolvedUrl("fetch_album_art.py")).replace(/^file:\/\//, ""))
+    var process = artworkProcessComponent.createObject(root, {
+      requestKey: root.artworkRequestKey,
+      command: ["python3", helper, url]
+    })
+    if (!process) return
+    root.artworkProcess = process
+    process.running = true
+  }
+
+  onArtworkRequestKeyChanged: root.refreshArtwork()
+  onShowAlbumArtChanged: root.refreshArtwork()
+
+  Component {
+    id: artworkProcessComponent
+    Process {
+      id: artworkFetch
+      property string requestKey: ""
+      property bool stdoutReady: false
+      property bool exitReady: false
+      property int exitCode: -1
+      property string resultUrl: ""
+      function finish() {
+        if (!stdoutReady || !exitReady) return
+        if (root.artworkProcess === artworkFetch) {
+          if (exitCode === 0 && requestKey === root.artworkRequestKey
+              && /^file:\/\/\/[^\r\n]+$/.test(resultUrl)) {
+            root.artworkSource = resultUrl
+          }
+          root.artworkProcess = null
+        }
+        artworkFetch.destroy()
+      }
+      stdout: StdioCollector {
+        waitForEnd: true
+        onStreamFinished: {
+          artworkFetch.resultUrl = String(text || "").trim()
+          artworkFetch.stdoutReady = true
+          artworkFetch.finish()
+        }
+      }
+      onExited: function(code) {
+        artworkFetch.exitCode = code
+        artworkFetch.exitReady = true
+        artworkFetch.finish()
+      }
+    }
+  }
   readonly property string identity: activePlayer ? (activePlayer.identity || activePlayer.desktopEntry || "") : ""
   readonly property bool isPlaying: activePlayer ? activePlayer.isPlaying : false
 
@@ -159,6 +230,7 @@ BorderSurface {
   }
 
   Component.onCompleted: {
+    root.refreshArtwork()
     if (root.activePlayer && root.activePlayer.position >= 0) {
       root.livePosition = root.activePlayer.position
     }
@@ -310,20 +382,17 @@ BorderSurface {
         Image {
           id: artImage
           anchors.fill: parent
-          source: root.artUrl
+          source: root.artworkSource
           fillMode: Image.PreserveAspectCrop
           sourceSize.width: 128
           sourceSize.height: 128
-          visible: root.artUrl !== "" && status === Image.Ready
+          visible: root.artworkSource !== "" && status === Image.Ready
         }
 
-        Text {
-          anchors.centerIn: parent
-          textFormat: Text.PlainText
-          text: "󰝚"
-          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.25)
-          font.family: Style.font.family
-          font.pixelSize: 28
+        ArtworkPlaceholder {
+          anchors.fill: parent
+          accentColor: root.accentColor
+          textColor: root.textColor
           visible: !artImage.visible
         }
       }

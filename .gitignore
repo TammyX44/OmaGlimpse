@@ -2,6 +2,10 @@
 *.qmlc
 *.jsc
 
+# Local Python test artifacts
+__pycache__/
+*.pyc
+
 # User config (contains personal positions/preferences)
 tammy-widgets.json
 

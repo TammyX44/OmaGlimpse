@@ -27,7 +27,8 @@ const context = {}
 vm.createContext(context)
 vm.runInContext([
   extractFunction('canRunAction'),
-  extractFunction('runAction')
+  extractFunction('runAction'),
+  extractFunction('refreshArtwork')
 ].join('\n'), context)
 
 function fakePlayer(overrides = {}) {
@@ -113,4 +114,38 @@ test('transport controls expose keyboard and accessibility affordances', () => {
 
 test('seek still assigns position on the displayed active player', () => {
   assert.match(source, /root\.activePlayer\.position = newPos/)
+})
+
+test('remote artwork is never assigned directly to Image.source', () => {
+  assert.match(source, /source: root\.artworkSource/)
+  assert.doesNotMatch(source, /source: root\.artUrl/)
+  assert.match(source, /root\.artworkSource = ""/)
+  assert.match(source, /requestKey === root\.artworkRequestKey/)
+  assert.match(source, /command: \["python3", helper, url\]/)
+})
+
+test('track change cancels the old fetch and clears its image before starting the next', () => {
+  let destroyed = false
+  const old = { running: true, destroy() { destroyed = true } }
+  let created
+  context.root = {
+    artworkProcess: old,
+    artworkSource: 'file:///old.png',
+    showAlbumArt: true,
+    hasMedia: true,
+    artUrl: 'https://example.test/new.png',
+    artworkRequestKey: 'new'
+  }
+  context.Qt = { resolvedUrl: () => 'file:///tmp/fetch_album_art.py' }
+  context.artworkProcessComponent = {
+    createObject(_root, options) { created = { ...options, running: false }; return created }
+  }
+  context.refreshArtwork.call(context.root)
+  assert.equal(old.running, false)
+  assert.equal(destroyed, true)
+  assert.equal(context.root.artworkSource, '')
+  assert.equal(context.root.artworkProcess, created)
+  assert.equal(created.running, true)
+  assert.equal(created.requestKey, 'new')
+  assert.deepEqual(Array.from(created.command), ['python3', '/tmp/fetch_album_art.py', 'https://example.test/new.png'])
 })
