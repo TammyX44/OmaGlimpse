@@ -28,6 +28,7 @@ vm.createContext(context)
 vm.runInContext([
   extractFunction('canRunAction'),
   extractFunction('runAction'),
+  extractFunction('playerKey'),
   extractFunction('refreshArtwork')
 ].join('\n'), context)
 
@@ -148,4 +149,11 @@ test('track change cancels the old fetch and clears its image before starting th
   assert.equal(created.running, true)
   assert.equal(created.requestKey, 'new')
   assert.deepEqual(Array.from(created.command), ['python3', '/tmp/fetch_album_art.py', 'https://example.test/new.png'])
+})
+
+test('an absent MPRIS player has a stable empty artwork key', () => {
+  assert.equal(context.playerKey(null), '')
+  assert.equal(context.playerKey(undefined), '')
+  assert.equal(context.playerKey({ identity: 'Player' }), 'Player')
+  assert.equal(context.playerKey({ dbusName: 'org.mpris.MediaPlayer2.demo' }), 'org.mpris.MediaPlayer2.demo')
 })

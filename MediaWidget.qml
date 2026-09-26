@@ -81,6 +81,7 @@ BorderSurface {
   }
 
   function playerKey(p) {
+    if (!p) return ""
     return String(p.dbusName || p.identity || "")
   }
 
