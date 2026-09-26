@@ -195,7 +195,7 @@ PanelWindow {
 
   color: "transparent"
   exclusionMode: ExclusionMode.Ignore
-  WlrLayershell.namespace: "tammy.widgets"
+  WlrLayershell.namespace: "io.github.tammyx44.omawidgets"
   WlrLayershell.layer: WlrLayer.Bottom
   WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -883,7 +883,7 @@ PanelWindow {
   // IPC handler — allows opening settings and toggling edit mode
   // from keybindings or the bar widget.
   IpcHandler {
-    target: "tammy.widgets"
+    target: "io.github.tammyx44.omawidgets"
 
     function openSettings(): void {
       root.settingsVisible = true
