@@ -70,6 +70,8 @@ Click the bar settings button or right-click a card and choose **Open full setti
 
 Settings are saved to `~/.config/omarchy/tammy-widgets.json`. This established filename is retained for compatibility with existing OmaWidgets installations, so existing preferences continue to work after upgrading to OmaGlimpse. You can also edit that JSON file directly; the plugin reloads it when it changes. The file is created when settings are first saved. If the file contains invalid JSON, correct it or use the settings panel's reset control.
 
+The media card reserves its playback height while idle, so starting a player or receiving a track duration does not expand it over neighboring cards. If an older saved layout already overlaps, reposition the affected cards or apply a layout preset once.
+
 Installing the plugin does not overwrite existing preferences. Changes made in the settings panel save to the plugin's own JSON file, and resetting to defaults requires confirmation.
 
 ## License

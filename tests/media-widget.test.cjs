@@ -157,3 +157,66 @@ test('an absent MPRIS player has a stable empty artwork key', () => {
   assert.equal(context.playerKey({ identity: 'Player' }), 'Player')
   assert.equal(context.playerKey({ dbusName: 'org.mpris.MediaPlayer2.demo' }), 'org.mpris.MediaPlayer2.demo')
 })
+
+function layoutExpression(marker, property, indent) {
+  const start = source.indexOf(marker)
+  assert.notEqual(start, -1, `missing ${marker}`)
+  const expression = source.slice(start).match(new RegExp(
+    `^ {${indent}}${property}: ([^\\n]+(?:\\n {${indent + 2},}[^\\n]+)*)`, 'm'))
+  assert.ok(expression, `missing ${property} after ${marker}`)
+  return expression[1]
+}
+
+for (const showControls of [true, false]) {
+  test(`media state changes preserve space above a neighbor (controls ${showControls ? 'shown' : 'hidden'})`, () => {
+    const layout = {
+      root: { showControls, hasMedia: false, trackLength: 0, isPlaying: false },
+      content: { anchors: {} },
+      trackInfo: {}, seekRow: {}, transportRow: {}
+    }
+    vm.createContext(layout)
+    const evaluate = expression => vm.runInContext(`(${expression})`, layout)
+    for (const id of ['trackInfo', 'seekRow', 'transportRow']) {
+      layout[id].height = evaluate(layoutExpression(`id: ${id}`, 'height', 6))
+    }
+    layout.content.spacing = evaluate(layoutExpression('id: content', 'spacing', 4))
+    layout.content.anchors.topMargin = evaluate(layoutExpression('id: content', 'anchors.topMargin', 4))
+    // The placeholder fills the reserved card. Depending on its resulting
+    // implicit height here would introduce a recursive size binding.
+    Object.defineProperty(layout.content, 'implicitHeight', {
+      get() { throw new Error('media card height depends on changing content.implicitHeight') }
+    })
+    const heightExpression = layoutExpression('id: root', 'height', 2)
+    Object.defineProperty(layout.root, 'height', { get: () => evaluate(heightExpression) })
+
+    const mediaY = 257
+    const gap = 12
+    const idleHeight = layout.root.height
+    const neighborY = mediaY + idleHeight + gap
+    assert.equal(idleHeight, showControls ? 180 : 122)
+
+    for (const state of [
+      { name: 'idle', hasMedia: false, trackLength: 0, isPlaying: false },
+      { name: 'metadata without duration', hasMedia: true, trackLength: 0, isPlaying: false },
+      { name: 'playing seekable track', hasMedia: true, trackLength: 180, isPlaying: true },
+      { name: 'paused seekable track', hasMedia: true, trackLength: 180, isPlaying: false },
+      { name: 'stopped', hasMedia: false, trackLength: 0, isPlaying: false }
+    ]) {
+      Object.assign(layout.root, state)
+      const height = layout.root.height
+      assert.equal(height, idleHeight, state.name)
+      assert.ok(mediaY + height + gap <= neighborY, `${state.name}: media overlaps its neighbor`)
+
+      const visibleRows = ['trackInfo', 'seekRow', 'transportRow'].filter(id =>
+        evaluate(layoutExpression(`id: ${id}`, 'visible', 6)))
+      const contentHeight = visibleRows.reduce((sum, id) => sum + layout[id].height, 0)
+        + Math.max(0, visibleRows.length - 1) * layout.content.spacing
+      assert.ok(contentHeight + 24 <= height, `${state.name}: media content exceeds its reserved card`)
+
+      if (!state.hasMedia) {
+        const placeholderHeight = evaluate(layoutExpression('// --- Placeholder when no media ---', 'height', 6))
+        assert.equal(placeholderHeight + 2 * layout.content.anchors.topMargin, height)
+      }
+    }
+  })
+}

@@ -42,7 +42,10 @@ BorderSurface {
   padding: 0
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 340
-  height: content.implicitHeight + 24
+  // Reserve the playback footprint even while no player or duration is
+  // available. Neighbouring cards may have saved positions below this one.
+  height: trackInfo.height + seekRow.height + content.spacing
+    + (root.showControls ? transportRow.height + content.spacing : 0) + 24
 
   // ── Player selection (mirrors Omarchy Service.qml logic) ──
 
@@ -336,7 +339,7 @@ BorderSurface {
     // --- Placeholder when no media ---
     Item {
       width: parent.width
-      height: 56
+      height: root.height - 2 * content.anchors.topMargin
       visible: !root.hasMedia
 
       Column {
@@ -365,6 +368,7 @@ BorderSurface {
 
     // --- Track info: art + title/artist ---
     Row {
+      id: trackInfo
       visible: root.hasMedia
       spacing: 14
       width: parent.width
@@ -440,6 +444,7 @@ BorderSurface {
 
     // --- Seekable progress bar ---
     Item {
+      id: seekRow
       width: parent.width
       height: 20
       visible: root.hasMedia && root.trackLength > 0
@@ -518,6 +523,7 @@ BorderSurface {
 
     // --- Controls: prev / play-pause / next ---
     Row {
+      id: transportRow
       spacing: 8
       anchors.horizontalCenter: parent.horizontalCenter
       visible: root.showControls && root.hasMedia
