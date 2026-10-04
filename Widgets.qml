@@ -6,6 +6,7 @@ import qs.Commons
 import qs.Ui
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
+import "WidgetLayout.js" as Layout
 
 // Desktop Widgets — floating overlay cards on the desktop.
 //
@@ -980,6 +981,7 @@ PanelWindow {
       // After that, data-driven size changes (e.g. media starting/stopping)
       // should NOT trigger a relayout of all cards — that causes jitter.
       property bool hasSettled: false
+      readonly property bool contentReady: cardLoader.status === Loader.Ready
 
       // Smooth position animation for auto-positioned cards.
       // When relayout moves cards, they slide instead of jumping.
@@ -1217,6 +1219,43 @@ PanelWindow {
   property string layoutWarning: ""
   onWidthChanged: relayoutTimer.restart()
   onHeightChanged: relayoutTimer.restart()
+
+  Timer {
+    id: gpuLayoutRepairTimer
+    interval: 2300
+    repeat: true
+    running: root.configLoaded && root.config.gpuLayoutRevision === 0
+      && !root.editMode && !root.dragInProgress && !root.pendingConfig && !root.inFlightText
+      && !root.persistenceBlocked && !root.externalConflict
+    onTriggered: root.repairGpuUpgradeLayout()
+  }
+
+  function repairGpuUpgradeLayout() {
+    if (!root.configLoaded || root.config.gpuLayoutRevision !== 0 || root.editMode
+        || root.dragInProgress || root.pendingConfig || root.inFlightText
+        || root.persistenceBlocked || root.externalConflict) return
+    for (var i = 0; i < root.allEnabledIds.length; i++) {
+      var card = root.cardItemFor(root.allEnabledIds[i])
+      if (!card || !card.contentReady || !card.hasSettled) return
+    }
+    var rects = root.getAllCardRects("")
+    rects.forEach(function(rect) { rect.manual = root.manualLayoutIds.indexOf(rect.widgetId) !== -1 })
+    var monitorCfg = Config.widgetConfig(root.config, "systemMonitor")
+    var result = monitorCfg && monitorCfg.showGpu !== false
+      ? Layout.repairGpuStack(rects, root.cardSpacing, root.height - root.dockOffset)
+      : { moves: [], blocked: false }
+    var c = root.shallowClone(root.config)
+    c.widgets = root.shallowClone(c.widgets)
+    result.moves.forEach(function(move) {
+      c.widgets[move.widgetId] = root.shallowClone(c.widgets[move.widgetId])
+      c.widgets[move.widgetId].y = move.y
+    })
+    c.gpuLayoutRevision = 1
+    root.config = c
+    root.widgetConfigRefresh()
+    root.saveConfig()
+    relayoutTimer.restart()
+  }
 
   function relayoutAutoCards() {
     if (root.dragInProgress) return

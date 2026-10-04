@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.tammyx44.omaglimpse",
   "name": "OmaGlimpse",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "author": "TammyX44",
   "license": "MIT",
   "description": "Theme-aware desktop widgets for Omarchy with system stats, battery and power profiles, media controls, processes, disks, network speed, and temperatures.",

@@ -86,7 +86,11 @@ The default titles are **Integrated GPU** and **Discrete GPU** when the hardware
 
 The Temperature card uses the selected GPU's temperature. Both cards share one GPU collector, using the shortest refresh interval requested by their enabled GPU readings. Hardware discovery runs every 30 seconds; AMD sensors use direct file reads, NVIDIA queries are bounded and backed off after failure, and Intel's optional tool streams samples. A sleeping GPU shows “Sleeping,” and missing usage shows “Unavailable” with a dash rather than a false 0%.
 
+On the first launch with older saved settings, the plugin checks the rendered card sizes and clears space below the taller GPU card. Only affected manually positioned cards move downward, including a stack below a moved card; their horizontal positions stay the same. Already clear layouts stay in place. If there is not enough screen space, affected cards stay in place and the existing overlap warning remains available in settings. This adjustment runs once, so playback changes do not keep moving cards.
+
 Intel usage needs both `intel_gpu_top` and permission to read hardware performance counters. If the tool reports “Permission denied,” installing it alone is insufficient; see the [Linux performance-counter access documentation](https://www.kernel.org/doc/html/latest/admin-guide/perf-security.html) for `CAP_PERFMON` configuration. OmaGlimpse runs the collector as your normal user and does not alter permissions.
+
+Update an installed copy with `omarchy plugin update io.github.tammyx44.omaglimpse`. If the shell still displays the previous widget after updating, run `omarchy restart shell` to load the new components.
 
 ## Development checks
 

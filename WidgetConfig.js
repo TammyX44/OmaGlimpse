@@ -7,6 +7,7 @@ var CONFIG_PATH = Quickshell.env("HOME") + "/.config/omarchy/tammy-widgets.json"
 function defaultConfig() {
   return {
     version: 3,
+    gpuLayoutRevision: 1,
     themeMode: "theme",
     colors: {
       accent: "",
@@ -176,6 +177,9 @@ function parseConfig(raw) {
 
   var defaults = defaultConfig()
   cfg = deepMerge(defaults, cfg)
+  // Older saved positions predate the extra GPU labels. Repair them once,
+  // after the rendered card sizes are available, rather than guessing here.
+  cfg.gpuLayoutRevision = !trimmed || saved.gpuLayoutRevision === 1 ? 1 : 0
   cfg.global.cardRadius = bounded(cfg.global.cardRadius, 18, 0, 30)
   cfg.global.cardSpacing = bounded(cfg.global.cardSpacing, 12, 0, 24)
   cfg.global.gaugeDiameter = bounded(cfg.global.gaugeDiameter, 110, 60, 160)
