@@ -21,6 +21,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property var gpuMonitor: null
+  property bool editMode: false
+  signal gpuSelected(string deviceId)
 
   // --- Config-driven settings ---
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
@@ -31,7 +34,7 @@ BorderSurface {
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   // When cardWidth is set, scale gauges down to fit so the slider always works
-  readonly property int visibleGaugeCount: (root.showCpu ? 1 : 0) + (root.showRam ? 1 : 0) + (root.showGpu && root.gpuAvailable ? 1 : 0)
+  readonly property int visibleGaugeCount: (root.showCpu ? 1 : 0) + (root.showRam ? 1 : 0) + (root.showGpu ? 1 : 0)
   readonly property real effectiveGaugeDiameter: {
     if (widgetCardWidth <= 0) return widgetGaugeDiameter
     var avail = widgetCardWidth - 40 - (visibleGaugeCount - 1) * 16
@@ -58,25 +61,9 @@ BorderSurface {
   property real ramUsedGb: 0
   property real ramFreeGb: 0
 
-  // --- GPU data ---
-  property real gpuValue: 0
-  property real gpuMemUsed: 0
-  property real gpuMemTotal: 0
-  property real gpuTemp: 0
-  property bool gpuAvailable: false
-  property bool gpuChecked: false  // set true after first nvidia-smi attempt
-
   function refresh() {
-    memInfoFile.reload()
-    cpuStatFile.reload()
-    // Only spawn nvidia-smi if GPU is shown AND we know a GPU exists
-    // (or we haven't checked yet). This avoids 61 failed spawns/min
-    // on systems without an NVIDIA GPU.
-    if (root.showGpu && !root.gpuChecked && !gpuProc.running) {
-      gpuProc.running = true
-    } else if (root.showGpu && root.gpuAvailable && !gpuProc.running) {
-      gpuProc.running = true
-    }
+    if (root.showRam) memInfoFile.reload()
+    if (root.showCpu) cpuStatFile.reload()
   }
 
   function updateMemInfo(raw) {
@@ -104,17 +91,6 @@ BorderSurface {
     }
   }
 
-  function updateGpu(raw) {
-    root.gpuChecked = true
-    var parsed = Model.parseGpuLine(raw)
-    if (!parsed) { gpuAvailable = false; return }
-    gpuAvailable = true
-    gpuValue = parsed.utilization
-    gpuMemUsed = parsed.memUsed === null ? 0 : parsed.memUsed
-    gpuMemTotal = parsed.memTotal === null ? 0 : parsed.memTotal
-    gpuTemp = parsed.temp === null ? 0 : parsed.temp
-  }
-
   // Read /proc/meminfo via FileView — no process spawn
   FileView {
     id: memInfoFile
@@ -133,44 +109,19 @@ BorderSurface {
     onLoaded: root.updateCpuStat(text())
   }
 
-  // GPU stats: tries nvidia-smi, then AMD rocm-smi, then the amdgpu
-  // gpu_busy_percent sysfs counter. If no source is usable, the gauge hides.
-  Process {
-    id: gpuProc
-    command: ["sh", "-c",
-      "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null || " +
-      "(rocm_output=''; " +
-      "if command -v rocm-smi >/dev/null 2>&1; then " +
-      "rocm_output=$(rocm-smi --showuse --showmeminfo vram --showtemp hotspot 2>/dev/null); " +
-      "if [ -n \"$rocm_output\" ]; then " +
-      "printf '%s\\n' \"$rocm_output\" | awk 'NR<=2{print}' | tr '\\n' ',' | sed 's/.*: //g' | tr -d ' '; " +
-      "exit 0; fi; fi; " +
-      "for f in /sys/class/drm/card*/device/gpu_busy_percent; do " +
-      "if [ -f \"$f\" ]; then v=$(cat \"$f\" 2>/dev/null); " +
-      "case \"$v\" in ''|*[!0-9]*) continue;; esac; " +
-      "printf '%s,0,0,0\\n' \"$v\"; exit 0; fi; " +
-      "done; exit 1) 2>/dev/null || echo ''"]
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateGpu(text) }
-  }
-
   Timer {
     interval: root.refreshInterval
-    running: true
+    running: root.showCpu || root.showRam
     repeat: true
     onTriggered: root.refresh()
   }
 
-  // A discrete GPU can be unavailable while runtime-suspended. Re-probe at a
-  // low rate so it can appear after waking without spawning a process every
-  // normal refresh on machines that have no supported GPU source.
-  Timer {
-    interval: 30000
-    running: root.showGpu && root.gpuChecked && !root.gpuAvailable
-    repeat: true
-    onTriggered: {
-      if (!gpuProc.running) gpuProc.running = true
-    }
+  onShowCpuChanged: {
+    root.prevCpuStat = null
+    root.cpuReady = false
+    if (root.showCpu) Qt.callLater(root.refresh)
   }
+  onShowRamChanged: if (root.showRam) Qt.callLater(root.refresh)
 
   Component.onCompleted: root.refresh()
   Text {
@@ -218,17 +169,19 @@ BorderSurface {
       visible: root.showRam
     }
 
-    CircularGauge {
-      value: root.gpuValue
-      label: "GPU"
-      subLabel: root.gpuAvailable
-        ? (root.gpuTemp > 0 ? root.gpuTemp + "°C" : "")
-        : ""
-      accentColor: Theme.resolveGaugeColor(root.config, root.widgetId, root.gpuValue, root.accentColor)
+    GpuGauge {
+      devices: root.gpuMonitor ? root.gpuMonitor.devices : []
+      selectedId: root.widgetCfg.gpuDevice || ""
+      aliases: root.widgetCfg.gpuAliases || ({})
+      discoveryReady: root.gpuMonitor ? root.gpuMonitor.discoveryReady : false
+      interactive: !root.editMode && !Config.widgetClickThrough(root.config, root.widgetId)
+      accentColor: Theme.resolveGaugeColor(root.config, root.widgetId,
+        device && device.utilization !== null ? device.utilization : 0, root.accentColor)
       textColor: root.textColor
       subTextColor: Theme.resolveMutedColor(root.textColor)
       diameter: root.effectiveGaugeDiameter
-      visible: root.showGpu && root.gpuAvailable
+      visible: root.showGpu
+      onSelected: function(deviceId) { root.gpuSelected(deviceId) }
     }
   }
 }

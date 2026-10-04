@@ -33,6 +33,8 @@ function defaultConfig() {
         showGpu: true,
         showCpu: true,
         showRam: true,
+        gpuDevice: "",
+        gpuAliases: {},
         cardWidth: 0,
         gaugeDiameter: 110
       },
@@ -206,6 +208,19 @@ function parseConfig(raw) {
     ? cfg.widgets.temperature.sensors.filter(function(sensor) { return sensor === "cpu" || sensor === "gpu" }) : ["cpu", "gpu"]
   cfg.widgets.temperature.unit = cfg.widgets.temperature.unit === "fahrenheit"
     ? "fahrenheit" : "celsius"
+  var monitor = cfg.widgets.systemMonitor
+  monitor.gpuDevice = typeof monitor.gpuDevice === "string"
+    && /^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$/i.test(monitor.gpuDevice)
+      ? monitor.gpuDevice.toLowerCase() : ""
+  var aliases = {}
+  if (plainObject(monitor.gpuAliases)) {
+    Object.keys(monitor.gpuAliases).slice(0, 64).forEach(function(id) {
+      if (/^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$/i.test(id)
+          && typeof monitor.gpuAliases[id] === "string")
+        aliases[id.toLowerCase()] = monitor.gpuAliases[id].replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 64)
+    })
+  }
+  monitor.gpuAliases = aliases
   cfg.widgets.diskUsage.mounts = Array.isArray(cfg.widgets.diskUsage.mounts)
     ? cfg.widgets.diskUsage.mounts.filter(function(mount) { return typeof mount === "string" && mount.charAt(0) === "/" }) : []
   return cfg

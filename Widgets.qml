@@ -27,6 +27,11 @@ PanelWindow {
 
   property var config: Config.defaultConfig()
 
+  GpuMonitor {
+    id: gpuMonitor
+    config: root.config
+  }
+
   // Emitted whenever config changes in-place. Widgets connect to this
   // to re-read their specific config values — avoids the expensive
   // Qt.binding cascade where ALL widgets re-evaluate on ANY change.
@@ -922,6 +927,8 @@ PanelWindow {
     item.accentColor = root.resolvedAccent
     item.cardRadius = root.cardRadius
     item.gaugeDiameter = root.gaugeDiameter
+    if (widgetId === "systemMonitor" || widgetId === "temperature") item.gpuMonitor = gpuMonitor
+    if (widgetId === "systemMonitor") item.editMode = root.editMode
   }
 
   // Cache of last known card sizes by widget ID.
@@ -1063,9 +1070,18 @@ PanelWindow {
         onLoaded: root.applyWidgetProps(item, card.widgetId)
       }
 
+      Connections {
+        target: cardLoader.item
+        ignoreUnknownSignals: true
+        function onGpuSelected(deviceId) { root.updateWidgetConfig("systemMonitor", "gpuDevice", deviceId) }
+      }
+
       // Re-apply props when config changes
       Connections {
         target: root
+        function onEditModeChanged() {
+          if (card.widgetId === "systemMonitor" && cardLoader.item) cardLoader.item.editMode = root.editMode
+        }
         function onWidgetConfigRefresh() {
           root.applyWidgetProps(cardLoader.item, card.widgetId)
           // Apply per-card opacity reactively
@@ -1293,7 +1309,7 @@ PanelWindow {
     accentColor: root.resolvedAccent
     visible: root.contextMenuVisible
 
-    onWidgetConfigChanged: root.updateWidgetConfig(widgetId, key, value)
+    onWidgetConfigChanged: function(widgetId, key, value) { root.updateWidgetConfig(widgetId, key, value) }
     onOpenSettings: root.showSettings()
     onEditModeToggleRequested: root.toggleEditMode()
     onVisibleChanged: if (!visible) root.hideContextMenu()
@@ -1315,6 +1331,7 @@ PanelWindow {
   // load it and control visibility via the `visible` property.
   SettingsPanel {
     id: settingsPanel
+    gpuDevices: gpuMonitor.inventory
     configError: root.configError
     layoutWarning: root.layoutWarning
     saveStatus: root.saveStatus
@@ -1325,7 +1342,7 @@ PanelWindow {
     editMode: root.editMode
     visible: root.settingsVisible
 
-    onWidgetConfigChanged: root.updateWidgetConfig(widgetId, key, value)
+    onWidgetConfigChanged: function(widgetId, key, value) { root.updateWidgetConfig(widgetId, key, value) }
     onGlobalConfigChanged: root.updateGlobalConfig(key, value)
     onColorConfigChanged: root.updateColorConfig(key, value)
     onResetRequested: root.resetConfig()

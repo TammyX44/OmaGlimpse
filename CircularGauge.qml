@@ -26,6 +26,7 @@ Item {
   property color glowColor: "transparent" // subtle glow behind progress arc
   property color labelColor: textColor    // override label color (e.g. semantic)
   property real labelSpacing: 8           // gap between gauge and label
+  property bool animateValue: true
 
   readonly property real fraction: Math.max(0, Math.min(1, value / 100))
   readonly property real arcRadius: diameter / 2 - arcWidth - 2
@@ -37,6 +38,7 @@ Item {
     + (subLabel !== "" ? 4 + gaugeDetail.implicitHeight : 0)
 
   Behavior on value {
+    enabled: gauge.animateValue
     NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
   }
 

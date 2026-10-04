@@ -6,6 +6,7 @@ import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
+import "GpuModel.js" as Gpu
 
 // Temperature sensors card: flat list layout.
 // Large hottest temp + status on the left, vertical divider,
@@ -21,6 +22,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property var gpuMonitor: null
+  readonly property var gpuDevices: root.gpuMonitor ? root.gpuMonitor.devices : []
+  readonly property string selectedGpuId: (Config.widgetConfig(root.config, "systemMonitor") || {}).gpuDevice || ""
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property int refreshInterval: Config.widgetRefreshInterval(root.config, root.widgetId)
@@ -60,7 +64,6 @@ BorderSurface {
   property string cpuTempPath: ""
   property bool cpuAvailable: false
   property bool gpuAvailable: false
-  property bool gpuChecked: false
 
   readonly property string tempStatus: Theme.resolveTempStatus(root.hottestTemp).toUpperCase()
   readonly property color tempColor: root.hottestSensor ? Theme.resolveTempGaugeColor(root.config, root.widgetId, root.hottestTemp, root.accentColor) : Theme.resolveMutedColor(root.textColor)
@@ -84,9 +87,6 @@ BorderSurface {
     if (root.sensorList.indexOf("cpu") !== -1) {
       if (root.cpuTempPath) cpuTempFile.reload()
       else cpuFindProc.running = true
-    }
-    if (root.sensorList.indexOf("gpu") !== -1) {
-      if (!root.gpuChecked || root.gpuAvailable) gpuTempProc.running = true
     }
     if (root.showFan && (!root.fanChecked || root.fanRpm >= 0)) fanProc.running = true
   }
@@ -137,17 +137,15 @@ BorderSurface {
     setNamedTemp("CPU", n / 1000)
   }
 
-  function updateGpuTemp(raw) {
-    root.gpuChecked = true
-    var n = Number(String(raw || "").trim())
-    if (!isFinite(n) || n <= 0) {
-      root.gpuAvailable = false
-      root.recomputeAggregates()
-      return
-    }
-    root.gpuAvailable = true
-    root.setGpuTemp(n > 1000 ? n / 1000 : n)
+  function updateGpuTemp() {
+    var index = Gpu.selectedIndex(root.gpuDevices, root.selectedGpuId)
+    var device = index >= 0 ? root.gpuDevices[index] : null
+    root.gpuAvailable = !!(device && device.temp !== null)
+    if (root.gpuAvailable) root.setGpuTemp(device.temp)
+    else root.recomputeAggregates()
   }
+  onGpuDevicesChanged: root.updateGpuTemp()
+  onSelectedGpuIdChanged: root.updateGpuTemp()
 
   function setGpuTemp(tempC) { setNamedTemp("GPU", tempC) }
 
@@ -194,12 +192,6 @@ BorderSurface {
   }
 
   Process {
-    id: gpuTempProc
-    command: ["sh", "-c", "nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null || (for f in /sys/class/drm/card*/device/hwmon/*/temp1_input; do if [ -f \"$f\" ]; then cat \"$f\"; exit 0; fi; done; exit 1) || echo ''"]
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateGpuTemp(text) }
-  }
-
-  Process {
     id: fanProc
     command: ["sh", "-c", "max=-1; for f in /sys/class/hwmon/*/fan*_input; do if [ -r \"$f\" ]; then val=$(cat \"$f\" 2>/dev/null); case \"$val\" in ''|*[!0-9]*) continue;; esac; if [ \"$val\" -gt \"$max\" ]; then max=$val; fi; fi; done; echo \"$max\""]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateFan(text) }
@@ -215,11 +207,9 @@ BorderSurface {
   Timer {
     interval: 30000
     running: (root.sensorList.indexOf("cpu") !== -1 && !root.cpuAvailable)
-      || (root.sensorList.indexOf("gpu") !== -1 && root.gpuChecked && !root.gpuAvailable)
       || (root.showFan && root.fanChecked && root.fanRpm < 0)
     repeat: true
     onTriggered: {
-      if (root.sensorList.indexOf("gpu") !== -1 && !root.gpuAvailable && !gpuTempProc.running) gpuTempProc.running = true
       if (root.sensorList.indexOf("cpu") !== -1 && !root.cpuAvailable && !cpuFindProc.running) cpuFindProc.running = true
       if (root.showFan && root.fanRpm < 0 && !fanProc.running) fanProc.running = true
     }
