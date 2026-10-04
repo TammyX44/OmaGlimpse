@@ -12,7 +12,7 @@ OmaGlimpse is a set of floating desktop cards for [Omarchy](https://omarchy.org)
 
 ## What it includes
 
-- **System Monitor:** CPU and memory gauges, plus GPU usage when a supported data source is available.
+- **System Monitor:** CPU and memory gauges, plus one GPU gauge that switches between detected GPUs with scrolling, horizontal dragging, or hover arrows. Device names and optional custom names identify the selected GPU.
 - **Battery & Power:** charge and battery energy flow when UPower reports them; power profile controls when supported by the system.
 - **Media Player:** track details and playback controls for an available MPRIS player.
 - **Top Processes:** processes ranked by CPU or memory use.
@@ -44,11 +44,11 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 
 - Omarchy with the Quickshell-based `omarchy-shell` and its plugin commands.
 - Standard Linux `/proc` and `/sys` interfaces and system utilities (`ps`, `df`, and a POSIX shell) for system, process, disk, network, and sensor readings.
-- Optional: UPower for battery status and energy flow; an MPRIS-capable player for media controls; `nvidia-smi` or `rocm-smi` for supported GPU readings. Some GPU and temperature readings can also come from readable `/sys` interfaces.
+- Optional: UPower for battery status and energy flow; an MPRIS-capable player for media controls; `nvidia-smi` for NVIDIA readings; `intel_gpu_top` from `intel-gpu-tools` for Intel usage when performance counters are readable by the current user. AMD utilization, VRAM, and GPU temperatures use readable `/sys` interfaces where the driver exposes them. `lspci` improves detected GPU names.
 - Optional: Python 3 and curl 8.4+ for size- and time-limited HTTPS album-cover downloads. Local covers and the theme-matched fallback work without them.
 - Optional: `powerprofilesctl` and a supported power-profile driver for profile detection and switching. The profile buttons call Omarchy's `omarchy-powerprofiles-set` command, which also remembers the selection in the user's Omarchy state directory.
 
-Unavailable hardware readings are hidden or shown as unavailable. The plugin does not install extra packages or request elevated privileges.
+Unavailable hardware readings are hidden or shown as unavailable. Detected GPUs remain selectable when readings are missing or the device is sleeping. The plugin does not install extra packages, change performance-counter permissions, or request elevated privileges.
 
 ## Install
 
@@ -73,6 +73,30 @@ Settings are saved to `~/.config/omarchy/tammy-widgets.json`. This established f
 The media card reserves its playback height while idle, so starting a player or receiving a track duration does not expand it over neighboring cards. If an older saved layout already overlaps, reposition the affected cards or apply a layout preset once.
 
 Installing the plugin does not overwrite existing preferences. Changes made in the settings panel save to the plugin's own JSON file, and resetting to defaults requires confirmation.
+
+### Multiple GPUs
+
+Scroll over the GPU gauge to cycle through devices, drag horizontally, or use the arrows that appear on hover. Keyboard users can focus the gauge and press the arrow keys. The gauge and labels slide together, keeping the card size fixed. Fast scrolling retains one pending step so it does not repeatedly restart the transition. Scrolling and dragging are disabled in edit mode and when the card is set to click-through.
+
+The default titles are **Integrated GPU** and **Discrete GPU** when the hardware model is recognizable, with the hardware name underneath. Uncertain devices use a vendor title such as **Intel GPU** or **AMD GPU**. Under **System Monitor** settings, choose the selected GPU and optionally give each detected device a custom name. Clearing a custom name restores its default title. Selection and names are saved by PCI identity rather than a changing DRM card number. If the selected GPU disappears, the first available device is shown until it returns.
+
+![GPU switching with live Intel and NVIDIA readings](assets/gpu-live-preview.gif)
+
+*Five seconds of live desktop readings at normal playback speed. [Watch the video](assets/gpu-live-preview.mp4).*
+
+The Temperature card uses the selected GPU's temperature. Both cards share one GPU collector, using the shortest refresh interval requested by their enabled GPU readings. Hardware discovery runs every 30 seconds; AMD sensors use direct file reads, NVIDIA queries are bounded and backed off after failure, and Intel's optional tool streams samples. A sleeping GPU shows “Sleeping,” and missing usage shows “Unavailable” with a dash rather than a false 0%.
+
+Intel usage needs both `intel_gpu_top` and permission to read hardware performance counters. If the tool reports “Permission denied,” installing it alone is insufficient; see the [Linux performance-counter access documentation](https://www.kernel.org/doc/html/latest/admin-guide/perf-security.html) for `CAP_PERFMON` configuration. OmaGlimpse runs the collector as your normal user and does not alter permissions.
+
+## Development checks
+
+```bash
+node --test tests/*.test.cjs
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+sh tests/run-gpu-qml-tests.sh
+```
+
+The optional QML checks need an installed Omarchy shell, Quickshell, and QtTest. They use temporary settings and simulated Intel/NVIDIA/AMD telemetry to check scrolling, swiping, keyboard/arrow controls, stable sizing, shared temperatures, and collector lifecycle. Set `OMARCHY_SHELL_DIR` if the shell is installed somewhere other than `/usr/share/omarchy/shell`. They leave desktop settings untouched.
 
 ## License
 

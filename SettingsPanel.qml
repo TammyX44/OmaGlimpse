@@ -14,6 +14,7 @@ PanelWindow {
   id: panel
 
   property var config: ({})
+  property var gpuDevices: []
   property color accentColor: Color.accent
   property color textColor: Color.foreground
   property color cardColor: Color.popups.background
@@ -104,6 +105,23 @@ PanelWindow {
 
   function widgetNumber(widget, key, fallback) {
     return finiteNumber(widget ? widget[key] : undefined, fallback)
+  }
+
+  function gpuOptions(selectedId) {
+    var options = [{ value: "", label: "Automatic (first GPU)" }]
+    panel.gpuDevices.forEach(function(device) { options.push({ value: device.id, label: device.name }) })
+    if (selectedId && !panel.gpuDevices.some(function(device) { return device.id === selectedId }))
+      options.push({ value: selectedId, label: "Disconnected GPU (" + selectedId + ")" })
+    return options
+  }
+
+  function setGpuAlias(deviceId, text) {
+    var monitor = Config.widgetConfig(panel.config, "systemMonitor") || {}
+    var aliases = panel.shallowClone(monitor.gpuAliases || {})
+    var name = String(text || "").replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 64)
+    if (name) aliases[deviceId] = name
+    else delete aliases[deviceId]
+    panel.widgetConfigChanged("systemMonitor", "gpuAliases", aliases)
   }
 
 
@@ -217,6 +235,7 @@ PanelWindow {
   // --- Settings card ---
   BorderSurface {
     id: settingsCard
+    objectName: "widgetSettingsCard"
     anchors.centerIn: parent
     width: Math.min(560, Math.max(320, parent.width - 40))
     height: Math.min(820, parent.height - 40)
@@ -1575,6 +1594,74 @@ PanelWindow {
                     label: "Show GPU gauge"
                     checked: widgetSection.wcfg.showGpu !== false
                     onToggled: panel.widgetConfigChanged(widgetSection.wid, "showGpu", value)
+                  }
+
+                  Row {
+                    width: parent.width
+                    spacing: 8
+                    height: 28
+                    Text {
+                      text: "Selected GPU"
+                      textFormat: Text.PlainText
+                      width: expandedSettings.labelWidth
+                      color: panel.textColor
+                      font.family: Style.font.family
+                      font.pixelSize: 11
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+                    WidgetDropdown {
+                      objectName: "gpuSelectedDropdown"
+                      width: Math.max(140, parent.width - expandedSettings.labelWidth - 8)
+                      height: 28
+                      label: "Selected GPU"
+                      showLabel: false
+                      value: widgetSection.wcfg.gpuDevice || ""
+                      hostActive: panel.visible && widgetSection.expanded
+                      dismissRevision: panel.menuRevision
+                      options: panel.gpuOptions(value)
+                      onChanged: function(value) { panel.widgetConfigChanged("systemMonitor", "gpuDevice", value) }
+                    }
+                  }
+                  Text {
+                    width: parent.width
+                    text: "Scroll over the GPU gauge or drag horizontally to switch. Your selection is remembered."
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: Theme.resolveMutedColor(panel.textColor)
+                    font.family: Style.font.family
+                    font.pixelSize: 11
+                    topPadding: 6
+                    bottomPadding: 6
+                  }
+                  Repeater {
+                    model: panel.gpuDevices
+                    delegate: Column {
+                      required property var modelData
+                      width: expandedSettings.rowWidth
+                      spacing: 4
+                      Text {
+                        width: parent.width
+                        text: modelData.name + " · " + modelData.kind
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        color: Theme.resolveMutedColor(panel.textColor)
+                        font.family: Style.font.family
+                        font.pixelSize: 10
+                        topPadding: 6
+                      }
+                      TextField {
+                        objectName: "gpuAlias-" + modelData.id
+                        width: parent.width
+                        height: 30
+                        text: (widgetSection.wcfg.gpuAliases || {})[modelData.id] || ""
+                        placeholderText: "Custom name (optional)"
+                        maximumLength: 64
+                        selectByMouse: true
+                        font.pixelSize: 11
+                        Accessible.name: "Custom name for " + modelData.name
+                        onEditingFinished: panel.setGpuAlias(modelData.id, text)
+                      }
+                    }
                   }
                 }
 
