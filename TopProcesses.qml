@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -37,11 +38,17 @@ BorderSurface {
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
   radius: root.cardRadius
-  padding: 20
+  padding: root.compactHeight ? 8 : 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 300
-  readonly property real naturalCardHeight: content.implicitHeight + 40
-  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
+  // Measure the original Auto layout, independently of the manual viewport.
+  readonly property real naturalCardHeight: heading.implicitHeight + samplingNote.implicitHeight
+    + columnLabels.implicitHeight + 20 + listContent.implicitHeight
+    + (listContent.implicitHeight > 0 ? 10 : 0) + 40
+  readonly property real minimumCardHeight: Math.max(100, 16 + heading.implicitHeight
+    + samplingNote.implicitHeight + columnLabels.implicitHeight + 8 + 4 + 22)
+  readonly property bool compactHeight: root.height < root.naturalCardHeight
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
 
 
   property var processes: []
@@ -208,7 +215,7 @@ BorderSurface {
   onProcessCountChanged: root.updateRanking()
   onSortByChanged: root.updateRanking()
 
-  Column {
+  Item {
     id: content
     objectName: "widgetSizingContent"
     anchors.left: parent.left
@@ -216,150 +223,229 @@ BorderSurface {
     anchors.verticalCenter: parent.verticalCenter
     anchors.leftMargin: 20
     anchors.rightMargin: 20
-    spacing: 10
+    height: Math.min(header.implicitHeight + listViewport.anchors.topMargin + listContent.implicitHeight,
+      Math.max(0, root.height - 2 * root.padding))
 
-    Text {
-      textFormat: Text.PlainText
-      text: "TOP PROCESSES"
-      color: root.textColor
-      font.family: Style.font.family
-      font.pixelSize: 12
-      font.bold: true
-      font.letterSpacing: 1.5
-    }
-
-    Text {
+    Column {
+      id: header
       width: parent.width
-      textFormat: Text.PlainText
-      text: !root.samplingEnabled ? "Sampling paused"
-        : "CPU: 100% = one core" + (root.sampleReady ? "" : " · Measuring…")
-      color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
-      font.family: Style.font.family
-      font.pixelSize: 9
-    }
-
-    Row {
-      width: parent.width
-      spacing: 0
+      spacing: root.compactHeight ? 4 : 10
 
       Text {
+        id: heading
         textFormat: Text.PlainText
-        text: "PROCESS"
-        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+        text: "TOP PROCESSES"
+        color: root.textColor
         font.family: Style.font.family
-        font.pixelSize: 9
+        font.pixelSize: 12
         font.bold: true
-        font.letterSpacing: 1
-        width: parent.width * 0.5
+        font.letterSpacing: 1.5
       }
+
       Text {
+        id: samplingNote
+        width: parent.width
         textFormat: Text.PlainText
-        text: root.sortBy === "mem" ? "MEM" : "CPU"
-        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+        text: !root.samplingEnabled ? "Sampling paused"
+          : "CPU: 100% = one core" + (root.sampleReady ? "" : " · Measuring…")
+        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
         font.family: Style.font.family
         font.pixelSize: 9
-        font.bold: true
-        font.letterSpacing: 1
-        width: parent.width * 0.25
-        horizontalAlignment: Text.AlignRight
       }
-      Text {
-        textFormat: Text.PlainText
-        text: root.sortBy === "mem" ? "CPU" : "MEM"
-        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
-        font.family: Style.font.family
-        font.pixelSize: 9
-        font.bold: true
-        font.letterSpacing: 1
-        width: parent.width * 0.25
-        horizontalAlignment: Text.AlignRight
-      }
-    }
-
-    Text {
-      width: parent.width
-      visible: root.samplingEnabled && !root.hasLoaded && root.processes.length === 0
-      textFormat: Text.PlainText
-      text: "Loading process data..."
-      color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
-      font.family: Style.font.family
-      font.pixelSize: 11
-    }
-
-    Text {
-      width: parent.width
-      visible: root.errorMessage !== ""
-      textFormat: Text.PlainText
-      text: root.errorMessage
-      color: Color.urgent
-      font.family: Style.font.family
-      font.pixelSize: 11
-      wrapMode: Text.WordWrap
-    }
-
-    Text {
-      width: parent.width
-      visible: root.samplingEnabled && root.hasLoaded && root.errorMessage === "" && root.processes.length === 0
-      textFormat: Text.PlainText
-      text: "No processes found"
-      color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
-      font.family: Style.font.family
-      font.pixelSize: 11
-    }
-
-    Repeater {
-      model: root.processes
 
       Row {
-        id: procRow
-        required property var modelData
-        required property int index
-
-        width: content.width
+        id: columnLabels
+        width: parent.width
         spacing: 0
-        height: 22
 
         Text {
           textFormat: Text.PlainText
-          text: procRow.modelData.name
-          color: root.textColor
+          text: "PROCESS"
+          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
           font.family: Style.font.family
-          font.pixelSize: 11
-          elide: Text.ElideRight
+          font.pixelSize: 9
+          font.bold: true
+          font.letterSpacing: 1
           width: parent.width * 0.5
-          anchors.verticalCenter: parent.verticalCenter
         }
-
-        Item {
-          width: parent.width * 0.25
-          height: parent.height
-          anchors.verticalCenter: parent.verticalCenter
-
-          Text {
-            anchors.fill: parent
-            textFormat: Text.PlainText
-            text: Model.formatPercent(root.sortBy === "mem"
-              ? procRow.modelData.mem : procRow.modelData.cpu)
-            color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.7)
-            font.family: Style.font.family
-            font.pixelSize: 11
-            horizontalAlignment: Text.AlignRight
-            anchors.verticalCenter: parent.verticalCenter
-          }
-        }
-
         Text {
           textFormat: Text.PlainText
-          text: Model.formatPercent(root.sortBy === "mem"
-            ? procRow.modelData.cpu : procRow.modelData.mem)
+          text: root.sortBy === "mem" ? "MEM" : "CPU"
+          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+          font.family: Style.font.family
+          font.pixelSize: 9
+          font.bold: true
+          font.letterSpacing: 1
+          width: parent.width * 0.25
+          horizontalAlignment: Text.AlignRight
+        }
+        Text {
+          textFormat: Text.PlainText
+          text: root.sortBy === "mem" ? "CPU" : "MEM"
+          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+          font.family: Style.font.family
+          font.pixelSize: 9
+          font.bold: true
+          font.letterSpacing: 1
+          width: parent.width * 0.25
+          horizontalAlignment: Text.AlignRight
+        }
+      }
+    }
+
+    Flickable {
+      id: listViewport
+      objectName: "listCardViewport"
+      anchors.top: header.bottom
+      anchors.topMargin: listContent.implicitHeight > 0 ? (root.compactHeight ? 4 : 10) : 0
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      clip: true
+      contentWidth: width
+      contentHeight: listContent.implicitHeight
+      flickableDirection: Flickable.VerticalFlick
+      boundsBehavior: Flickable.StopAtBounds
+      activeFocusOnTab: true
+      Accessible.role: Accessible.List
+      Accessible.name: "Top processes"
+      Accessible.description: "Scroll with the mouse wheel, arrow keys, Page Up or Page Down."
+
+      function scrollTo(position) {
+        cancelFlick()
+        contentY = Math.max(0, Math.min(position, Math.max(0, contentHeight - height)))
+      }
+      onContentHeightChanged: scrollTo(contentY)
+      onHeightChanged: scrollTo(contentY)
+      Keys.onPressed: function(event) {
+        switch (event.key) {
+        case Qt.Key_Up: scrollTo(contentY - 32); break
+        case Qt.Key_Down: scrollTo(contentY + 32); break
+        case Qt.Key_PageUp: scrollTo(contentY - height); break
+        case Qt.Key_PageDown: scrollTo(contentY + height); break
+        case Qt.Key_Home: scrollTo(0); break
+        case Qt.Key_End: scrollTo(contentHeight); break
+        default: event.accepted = false; return
+        }
+        event.accepted = true
+      }
+      TapHandler { onTapped: listViewport.forceActiveFocus() }
+      Controls.ScrollBar.vertical: Controls.ScrollBar {
+        parent: content
+        x: listViewport.width + 6
+        y: listViewport.y
+        height: listViewport.height
+        width: 6
+        policy: Controls.ScrollBar.AsNeeded
+        contentItem: Rectangle {
+          implicitWidth: 6
+          radius: 3
+          color: root.textColor
+          opacity: listViewport.activeFocus ? 0.7 : 0.4
+        }
+      }
+
+      Column {
+        id: listContent
+        width: listViewport.width
+        spacing: 10
+
+        Text {
+          width: parent.width
+          visible: root.samplingEnabled && !root.hasLoaded && root.processes.length === 0
+          textFormat: Text.PlainText
+          text: "Loading process data..."
           color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
           font.family: Style.font.family
           font.pixelSize: 11
-          width: parent.width * 0.25
-          horizontalAlignment: Text.AlignRight
-          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Text {
+          width: parent.width
+          visible: root.errorMessage !== ""
+          textFormat: Text.PlainText
+          text: root.errorMessage
+          color: Color.urgent
+          font.family: Style.font.family
+          font.pixelSize: 11
+          wrapMode: Text.Wrap
+        }
+
+        Text {
+          width: parent.width
+          visible: root.samplingEnabled && root.hasLoaded && root.errorMessage === "" && root.processes.length === 0
+          textFormat: Text.PlainText
+          text: "No processes found"
+          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+          font.family: Style.font.family
+          font.pixelSize: 11
+        }
+
+        Repeater {
+          model: root.processes
+
+          Row {
+            id: procRow
+            required property var modelData
+            required property int index
+
+            width: content.width
+            spacing: 0
+            height: 22
+
+            Text {
+              textFormat: Text.PlainText
+              text: procRow.modelData.name
+              color: root.textColor
+              font.family: Style.font.family
+              font.pixelSize: 11
+              elide: Text.ElideRight
+              width: parent.width * 0.5
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Item {
+              width: parent.width * 0.25
+              height: parent.height
+              anchors.verticalCenter: parent.verticalCenter
+
+              Text {
+                anchors.fill: parent
+                textFormat: Text.PlainText
+                text: Model.formatPercent(root.sortBy === "mem"
+                  ? procRow.modelData.mem : procRow.modelData.cpu)
+                color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.7)
+                font.family: Style.font.family
+                font.pixelSize: 11
+                horizontalAlignment: Text.AlignRight
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: Model.formatPercent(root.sortBy === "mem"
+                ? procRow.modelData.cpu : procRow.modelData.mem)
+              color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+              font.family: Style.font.family
+              font.pixelSize: 11
+              width: parent.width * 0.25
+              horizontalAlignment: Text.AlignRight
+              anchors.verticalCenter: parent.verticalCenter
+            }
+          }
         }
       }
+    }
+
+    Rectangle {
+      objectName: "listCardFocus"
+      anchors.fill: listViewport
+      visible: listViewport.activeFocus
+      color: "transparent"
+      border.width: 1
+      border.color: root.accentColor
+      radius: 3
     }
   }
 }

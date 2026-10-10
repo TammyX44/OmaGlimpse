@@ -35,7 +35,15 @@ BorderSurface {
   readonly property bool showPower: root.widgetCfg.showPower !== false
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
-  readonly property real effectiveGaugeDiameter: Math.max(60, Math.min(widgetGaugeDiameter, root.width - 32))
+  readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
+  readonly property bool compactLayout: root.requestedHeight > 0 && root.requestedHeight < 200
+  readonly property real minimumCardHeight: 80
+  readonly property bool profilesVisible: root.showProfiles && root.profiles.length > 0
+  readonly property real effectiveGaugeDiameter: root.requestedHeight > 0
+    ? Math.max(root.compactLayout ? 34 : 60, Math.min(root.widgetGaugeDiameter, root.width - 32,
+      root.requestedHeight - (root.compactLayout ? 16 + (root.profilesVisible ? 30 : 0)
+        : 32 + 5 + batteryFont.height + 16 + (root.profilesVisible ? 46 : 10) + (root.profileError ? batteryFont.height + 10 : 0))))
+    : Math.max(60, Math.min(root.widgetGaugeDiameter, root.width - 32))
 
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
@@ -44,7 +52,8 @@ BorderSurface {
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(260, root.widgetGaugeDiameter + 48)
   readonly property real naturalCardHeight: content.implicitHeight + 32
-  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
+  FontMetrics { id: batteryFont; font.family: Style.font.family; font.pixelSize: 10 }
 
 
   readonly property var batteryDevice: UPower.displayDevice
@@ -300,17 +309,21 @@ BorderSurface {
   Column {
     id: content
     objectName: "widgetSizingContent"
-    width: root.width - 24
+    width: root.width - (root.compactLayout ? 16 : 24)
     anchors.centerIn: parent
-    spacing: 10
+    spacing: root.compactLayout ? 4 : 10
 
-    Row {
-      spacing: 16
-      anchors.horizontalCenter: parent.horizontalCenter
+    Item {
+      width: parent.width
+      height: root.compactLayout ? Math.max(batteryGauge.height, batterySummary.height)
+        : batteryGauge.height + 10 + batterySummary.height
 
       CircularGauge {
+        id: batteryGauge
+        x: root.compactLayout ? 0 : (parent.width - width) / 2
         value: root.batteryFraction * 100
         label: "BATTERY"
+        showLabel: !root.compactLayout
         labelSpacing: 5
         arcWidth: 3
         displayText: root.batteryInfo.available ? "" : "—"
@@ -320,24 +333,26 @@ BorderSurface {
         subTextColor: Theme.resolveMutedColor(root.textColor)
         diameter: root.effectiveGaugeDiameter
       }
-    }
-
     Text {
-      width: parent.width
+      id: batterySummary
+      x: root.compactLayout ? batteryGauge.width + 8 : 0
+      y: root.compactLayout ? (parent.height - height) / 2 : batteryGauge.height + 10
+      width: root.compactLayout ? parent.width - batteryGauge.width - 8 : parent.width
       height: 16
-      text: root.compactSummary
+      text: root.compactLayout && root.profileError ? root.profileError : root.compactSummary
       textFormat: Text.PlainText
-      color: Theme.resolveMutedColor(root.textColor)
+      color: root.compactLayout && root.profileError ? Color.urgent : Theme.resolveMutedColor(root.textColor)
       font.family: Style.font.family
       font.pixelSize: 11
-      minimumPixelSize: 8
+      minimumPixelSize: 10
       fontSizeMode: Text.Fit
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
       maximumLineCount: 1
       elide: Text.ElideRight
       Accessible.role: Accessible.StaticText
-      Accessible.name: root.compactSummary
+      Accessible.name: root.profileError || root.compactSummary
+    }
     }
 
     Row {
@@ -345,7 +360,7 @@ BorderSurface {
       width: parent.width
       spacing: 6
       anchors.horizontalCenter: parent.horizontalCenter
-      visible: root.showProfiles && root.profiles.length > 0
+      visible: root.profilesVisible
 
       Repeater {
         model: root.profiles
@@ -416,14 +431,16 @@ BorderSurface {
 
     Text {
       width: parent.width
-      visible: root.profileError !== ""
+      visible: root.profileError !== "" && !root.compactLayout
       textFormat: Text.PlainText
       text: root.profileError
       color: Color.urgent
       font.family: Style.font.family
       font.pixelSize: 10
       horizontalAlignment: Text.AlignHCenter
-      wrapMode: Text.WordWrap
+      wrapMode: root.requestedHeight > 0 ? Text.NoWrap : Text.WordWrap
+      elide: Text.ElideRight
+      Accessible.name: root.profileError
     }
   }
 }

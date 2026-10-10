@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import Quickshell
+import Quickshell.Wayland
 import "." as Plugin
 import "WidgetConfig.js" as Config
 import "LayoutProfiles.js" as Profiles
@@ -67,6 +68,7 @@ ShellRoot {
         compare(desktop.configLoaded, true)
         compare(desktop.allEnabledIds.length, 0)
         compare(desktop.configPath, Quickshell.env("LAYOUT_TEST_CONFIG"))
+        compare(desktop.WlrLayershell.keyboardFocus, WlrKeyboardFocus.OnDemand)
       }
       function test_b_undo_restores_layout_preserves_preferences() {
         desktop.undoStack = []

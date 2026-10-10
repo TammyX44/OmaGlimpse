@@ -19,3 +19,11 @@ test('manual height enlarges independently and refuses to crop dynamic content',
   assert.equal(Sizing.cardHeight(-1, 40), 80)
   assert.equal(Sizing.cardHeight(1000, 1400), 1400)
 })
+
+test('adaptive cards can shrink below the full layout without ignoring their compact floor', () => {
+  assert.equal(Sizing.cardHeight(100, 180, 100), 100)
+  assert.equal(Sizing.cardHeight(80, 180, 100), 100)
+  assert.equal(Sizing.cardHeight(0, 180, 100), 180)
+  assert.equal(Sizing.cardHeight(120, 640, 80), 120)
+  assert.equal(Sizing.cardHeight(1000, 1400, 80), 1000)
+})

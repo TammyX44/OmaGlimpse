@@ -35,20 +35,31 @@ BorderSurface {
   readonly property string interfaceFilter: String(root.widgetCfg.interface || "auto")
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
-  readonly property real effectiveGaugeDiameter: {
+  readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
+  readonly property bool compactNumbers: root.requestedHeight > 0 && root.requestedHeight < 160
+  readonly property bool compactSizing: root.requestedHeight > 0 && root.requestedHeight < 260
+  readonly property int contentPadding: root.compactSizing ? 8 : 20
+  readonly property real minimumCardHeight: root.showHistory ? 90 : 80
+  readonly property real baseGaugeDiameter: {
     if (widgetCardWidth <= 0) return widgetGaugeDiameter
     var avail = widgetCardWidth - 40 - 8
     return Math.max(40, Math.min(widgetGaugeDiameter, avail / 2))
   }
+  readonly property real effectiveGaugeDiameter: root.requestedHeight > 0
+    ? Math.max(40, Math.min(root.baseGaugeDiameter, root.requestedHeight
+      - 2 * root.contentPadding - interfaceHeader.implicitHeight - (root.showHistory ? historyGraph.height : 0)
+      - (root.showHistory ? 3 : 2) * content.spacing - networkFont.height - (root.compactSizing ? 3 : 8)
+      - (root.compactSizing ? 0 : 4 + networkFont.height))) : root.baseGaugeDiameter
 
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
   radius: root.cardRadius
-  padding: 20
+  padding: root.contentPadding
 
-  width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, gaugeRow.implicitWidth + 40)
+  width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, root.widgetGaugeDiameter * 2 + 48)
   readonly property real naturalCardHeight: content.implicitHeight + 40
-  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
+  FontMetrics { id: networkFont; font.family: Style.font.family; font.pixelSize: 10 }
 
 
   property var prevDevs: null
@@ -188,16 +199,20 @@ BorderSurface {
     id: content
     objectName: "widgetSizingContent"
     anchors.centerIn: parent
-    spacing: 8
-    width: root.width - 40
+    spacing: root.compactSizing ? 4 : 8
+    width: root.width - 2 * root.contentPadding
 
     // Interface name as a header
     Text {
+      id: interfaceHeader
+      objectName: "networkInterfaceHeader"
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       elide: Text.ElideRight
       textFormat: Text.PlainText
-      text: root.activeInterface || (root.interfaceFilter !== "auto" ? root.interfaceFilter : "—")
+      text: (root.activeInterface || (root.interfaceFilter !== "auto" ? root.interfaceFilter : "—"))
+        + (root.compactSizing && !root.sampleReady ? " · " + root.sampleState : "")
+      Accessible.name: text
       color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
       font.family: Style.font.family
       font.pixelSize: 11
@@ -208,6 +223,7 @@ BorderSurface {
 
     Row {
       id: gaugeRow
+      visible: !root.compactNumbers
       spacing: 8
       anchors.horizontalCenter: parent.horizontalCenter
 
@@ -217,7 +233,8 @@ BorderSurface {
         animateValue: false
         label: "DOWN"
         displayText: root.sampleReady ? Model.formatSpeed(root.rxSpeed) : "—"
-        subLabel: root.sampleReady ? root.scaleLabel : root.sampleState
+        subLabel: root.compactSizing ? "" : root.sampleReady ? root.scaleLabel : root.sampleState
+        labelSpacing: root.compactSizing ? 3 : 8
         accentColor: root.accentColor
         textColor: root.textColor
         diameter: root.effectiveGaugeDiameter
@@ -228,10 +245,46 @@ BorderSurface {
         animateValue: false
         label: "UP"
         displayText: root.sampleReady ? Model.formatSpeed(root.txSpeed) : "—"
-        subLabel: root.sampleReady ? root.scaleLabel : root.sampleState
+        subLabel: root.compactSizing ? "" : root.sampleReady ? root.scaleLabel : root.sampleState
+        labelSpacing: root.compactSizing ? 3 : 8
         accentColor: root.accentColor
         textColor: root.textColor
         diameter: root.effectiveGaugeDiameter
+      }
+    }
+
+    Row {
+      visible: root.compactNumbers
+      width: parent.width
+      spacing: 8
+      Repeater {
+        model: [{label:"DOWN",speed:root.rxSpeed},{label:"UP",speed:root.txSpeed}]
+        Column {
+          required property var modelData
+          width: (content.width - 8) / 2
+          spacing: 2
+          Text {
+            width: parent.width
+            text: parent.modelData.label
+            textFormat: Text.PlainText
+            color: root.textColor
+            font.family: Style.font.family
+            font.pixelSize: 10
+            horizontalAlignment: Text.AlignHCenter
+          }
+          Text {
+            width: parent.width
+            text: root.sampleReady ? Model.formatSpeed(parent.modelData.speed) : "—"
+            textFormat: Text.PlainText
+            color: root.accentColor
+            font.family: Style.font.family
+            font.pixelSize: 13
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+            Accessible.name: parent.modelData.label + " " + text
+            Accessible.description: root.sampleReady ? root.scaleLabel : root.sampleState
+          }
+        }
       }
     }
 
@@ -240,18 +293,19 @@ BorderSurface {
       objectName: "networkHistoryGraph"
       visible: root.showHistory
       width: parent.width
-      height: 36
+      height: root.compactNumbers ? 16 : root.compactSizing ? 24 : 36
       readonly property var points: root.history
       readonly property real sampleTime: root.historyTime
-      readonly property real scale: root.scaleBytes
+      readonly property real referenceScale: root.scaleBytes
       readonly property color downColor: root.accentColor
       readonly property color upColor: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.65)
       onPointsChanged: requestPaint()
       onSampleTimeChanged: requestPaint()
-      onScaleChanged: requestPaint()
+      onReferenceScaleChanged: requestPaint()
       onDownColorChanged: requestPaint()
       onUpColorChanged: requestPaint()
       onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
       onVisibleChanged: if (visible) requestPaint()
       onPaint: {
         var ctx = getContext("2d")
@@ -267,7 +321,7 @@ BorderSurface {
           ctx.strokeStyle = c === 0 ? downColor : upColor
           ctx.lineWidth = 1.5
           var lines = History.segments(points, channels[c], sampleTime, width,
-            height - 3, scale, root.samplingInterval * 2.5)
+            height - 3, referenceScale, root.samplingInterval * 2.5)
           for (var i = 0; i < lines.length; i++) {
             ctx.beginPath()
             for (var j = 0; j < lines[i].length; j++) {

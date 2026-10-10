@@ -2,7 +2,7 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Matched dimension rows with independent Auto resets and content-safe height.
+// Independent dimensions: manual cards adapt, while Auto restores their full layout.
 Column {
   id: root
   property string widgetId: ""
@@ -111,7 +111,7 @@ Column {
   }
   Text {
     width: root.width
-    text: "Height expands to fit content. Auto keeps the natural size."
+    text: "Smaller cards use compact layouts. Auto restores the full size."
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
     color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.72)

@@ -84,7 +84,7 @@ Enable edit mode to see alignment guides while dragging. Grid snapping and card-
 
 Save a named arrangement such as Work or Gaming and load it later. Replacing or deleting a named layout requires a second click. **Widget display** selects the monitor that holds the desktop cards. Each connected monitor arrangement, resolution and scale remembers its own layout; reconnecting a known setup restores it. A smaller setup fits manual positions to its usable area without changing the arrangement saved for the larger setup. Cards that cannot fit still produce the existing layout warning. The cards occupy one selected display at a time.
 
-Every card's expanded settings include independent **Card Width** and **Card Height** sliders, with an **Auto** reset for each dimension. Height defaults to Auto, preserving existing layouts. Manual height is a minimum footprint: a card grows if its content needs more room, so gauges, profile pills, media controls and longer lists are never cut off. Enabled cards report their content minimum to the settings slider. Height changes are included in Undo, named layouts and monitor layouts; older saved layouts restore Auto height.
+Every card's expanded settings include independent **Card Width** and **Card Height** sliders, with an **Auto** reset for each dimension. Height defaults to Auto, preserving existing layouts. Shorter cards use compact layouts: artwork and rings stay proportional, media controls reflow, battery details sit beside the gauge, and network rates switch to a numeric view with the optional history graph still visible. Process and disk lists scroll beneath fixed headings rather than enlarging the card. Only a small readability minimum is enforced (80–110px for the default cards, depending on enabled content); text and controls are not stretched. Height changes are included in Undo, named layouts and monitor layouts; older saved layouts restore Auto height.
 
 ### Sampling and live readings
 
@@ -124,6 +124,8 @@ sh tests/sampling-run-qml-tests.sh
 NETWORK_QML_TESTS=1 node --test tests/network-history.test.cjs
 sh tests/run-layout-qml-tests.sh
 sh tests/run-sizing-qml-tests.sh
+LIST_CARD_QML_TESTS=1 node --test tests/list-card-resizing.test.cjs
+node --test tests/media-resizing.test.cjs
 ```
 
 The optional QML checks need an installed Omarchy shell, Quickshell, and QtTest. They use temporary settings and simulated Intel/NVIDIA/AMD telemetry to check scrolling, swiping, keyboard/arrow controls, stable sizing, shared temperatures, and collector lifecycle. Set `OMARCHY_SHELL_DIR` if the shell is installed somewhere other than `/usr/share/omarchy/shell`. They leave desktop settings untouched.

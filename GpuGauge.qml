@@ -13,6 +13,7 @@ Item {
   property bool interactive: true
   property bool discoveryReady: false
   property real diameter: 110
+  property bool compact: false
   property color accentColor: Color.accent
   property color textColor: Color.foreground
   property color subTextColor: Qt.rgba(textColor.r, textColor.g, textColor.b, 0.6)
@@ -37,7 +38,7 @@ Item {
   signal selected(string deviceId)
 
   width: root.diameter
-  height: root.diameter + 78
+  height: root.diameter + (root.compact ? 52 : 78)
   activeFocusOnTab: root.canSwitch
   Accessible.role: Accessible.ComboBox
   Accessible.name: root.device ? Gpu.displayName(root.device, root.aliases) + ", " + root.device.name + ", "
@@ -155,6 +156,8 @@ Item {
       discoveryReady: root.discoveryReady
       animateReadings: root.animationsEnabled && !root.transitioning
       diameter: root.diameter
+      compact: root.compact
+      showDeviceName: !root.compact || !root.canSwitch || !(gaugeHover.hovered || root.activeFocus || root.arrowFocused)
       textColor: root.textColor
       subTextColor: root.subTextColor
     }
@@ -166,6 +169,8 @@ Item {
       discoveryReady: root.discoveryReady
       animateReadings: root.animationsEnabled && !root.transitioning
       diameter: root.diameter
+      compact: root.compact
+      showDeviceName: !root.compact || !root.canSwitch || !(gaugeHover.hovered || root.activeFocus || root.arrowFocused)
       textColor: root.textColor
       subTextColor: root.subTextColor
     }
@@ -204,6 +209,7 @@ Item {
     visible: root.activeFocus
   }
   HoverHandler { id: gaugeHover }
+  property bool arrowFocused: false
   Controls.ToolTip {
     id: gpuTooltip
     visible: gaugeHover.hovered && root.device !== null
@@ -244,14 +250,19 @@ Item {
     }
   }
   Repeater {
+    id: gpuArrows
     model: [-1, 1]
     delegate: Rectangle {
       required property int modelData
       objectName: modelData < 0 ? "previousGpu" : "nextGpu"
-      x: modelData < 0 ? -5 : root.width - 19
-      y: root.diameter + 2
-      width: 24; height: 24; radius: 6
-      visible: root.canSwitch && (gaugeHover.hovered || root.activeFocus || activeFocus)
+      x: root.compact ? (modelData < 0 ? 0 : root.width - width) : (modelData < 0 ? -5 : root.width - 19)
+      y: root.diameter + (root.compact ? 18 : 2)
+      width: root.compact ? 18 : 24; height: root.compact ? 18 : 24; radius: 6
+      visible: root.canSwitch && (gaugeHover.hovered || root.activeFocus || root.arrowFocused)
+      onActiveFocusChanged: {
+        var other = gpuArrows.itemAt(modelData < 0 ? 1 : 0)
+        root.arrowFocused = activeFocus || !!(other && other.activeFocus)
+      }
       color: activeFocus ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.15) : "transparent"
       activeFocusOnTab: root.canSwitch
       Accessible.role: Accessible.Button

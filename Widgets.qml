@@ -349,7 +349,9 @@ PanelWindow {
   exclusionMode: ExclusionMode.Ignore
   WlrLayershell.namespace: "io.github.tammyx44.omaglimpse"
   WlrLayershell.layer: WlrLayer.Bottom
-  WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+  // Clicked list and media controls may take keyboard focus, without grabbing
+  // it exclusively. Empty areas and click-through cards retain their input mask.
+  WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
   anchors { top: true; bottom: true; left: true; right: true }
 
@@ -1124,7 +1126,7 @@ PanelWindow {
   property var cardMetrics: ({})
   function updateCardMetric(item, widgetId) {
     if (!item) return
-    var metric = { width: item.width, height: item.height, minimumHeight: item.naturalCardHeight }
+    var metric = { width: item.width, height: item.height, minimumHeight: item.minimumCardHeight }
     var old = root.cardMetrics[widgetId]
     if (old && old.width === metric.width && old.height === metric.height && old.minimumHeight === metric.minimumHeight) return
     var next = shallowClone(root.cardMetrics)
@@ -1276,7 +1278,7 @@ PanelWindow {
         target: cardLoader.item
         ignoreUnknownSignals: true
         function onGpuSelected(deviceId) { root.updateWidgetConfig("systemMonitor", "gpuDevice", deviceId) }
-        function onNaturalCardHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
+        function onMinimumCardHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
         function onWidthChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
         function onHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
       }

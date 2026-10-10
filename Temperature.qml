@@ -37,9 +37,13 @@ BorderSurface {
   readonly property bool showFan: root.widgetCfg.showFan !== false
   readonly property string temperatureUnit: root.widgetCfg.unit === "fahrenheit" ? "fahrenheit" : "celsius"
   readonly property string unitSymbol: root.temperatureUnit === "fahrenheit" ? "°F" : "°C"
-  readonly property bool compactLayout: root.width <= 240
-  readonly property int contentSpacing: root.compactLayout ? 14 : 18
-  readonly property int heroFontSize: root.compactLayout ? 34 : 38
+  readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
+  readonly property real minimumCardHeight: 80
+  readonly property bool shortLayout: root.requestedHeight > 0 && root.requestedHeight < 100
+  readonly property bool compactLayout: root.width <= 240 || root.shortLayout
+  readonly property int contentSpacing: root.compactLayout ? 8 : 18
+  readonly property int contentPadding: root.shortLayout ? 8 : 16
+  readonly property int heroFontSize: root.shortLayout ? 28 : root.compactLayout ? 34 : 38
   readonly property int detailFontSize: root.compactLayout ? 11 : 12
 
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
@@ -48,11 +52,11 @@ BorderSurface {
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
   radius: root.cardRadius
-  padding: 16
+  padding: root.contentPadding
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 240
-  readonly property real naturalCardHeight: Math.max(110, content.implicitHeight + 32)
-  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
+  readonly property real naturalCardHeight: 110
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
 
   // --- State ---
   property var temps: []
@@ -250,19 +254,25 @@ BorderSurface {
     id: content
     objectName: "widgetSizingContent"
     anchors.centerIn: parent
+    width: root.width - 2 * root.contentPadding
     spacing: root.contentSpacing
 
     // --- Left: hero temp + status ---
     Column {
+      id: heroColumn
+      width: (content.width - 1 - 2 * content.spacing) * 0.44
       spacing: 4
       anchors.verticalCenter: parent.verticalCenter
 
       Row {
+        width: parent.width
         spacing: 2
         anchors.horizontalCenter: parent.horizontalCenter
 
         Text {
           id: heroValue
+          width: parent.width - (unitLabel.visible ? unitLabel.implicitWidth + parent.spacing : 0)
+          height: root.heroFontSize * 1.3
           textFormat: Text.PlainText
           text: root.hottestSensor ? root.formatTemp(root.animatedHottestTemp) : "—"
           Accessible.role: Accessible.StaticText
@@ -270,10 +280,14 @@ BorderSurface {
           color: root.textColor
           font.family: Style.font.family
           font.pixelSize: root.heroFontSize
+          fontSizeMode: Text.Fit
+          minimumPixelSize: 20
+          horizontalAlignment: Text.AlignRight
           font.weight: Font.DemiBold
         }
 
         Text {
+          id: unitLabel
           visible: root.hottestSensor !== ""
           textFormat: Text.PlainText
           text: root.unitSymbol
@@ -302,18 +316,20 @@ BorderSurface {
     // --- Vertical divider ---
     Rectangle {
       width: 1
-      height: root.compactLayout ? 62 : 70
+      height: root.shortLayout ? 54 : root.compactLayout ? 62 : 70
       color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.14)
       anchors.verticalCenter: parent.verticalCenter
     }
 
     // --- Right: sensor rows with color dots ---
     Column {
-      spacing: 7
+      width: content.width - heroColumn.width - 1 - 2 * content.spacing
+      spacing: root.shortLayout ? 4 : 7
       anchors.verticalCenter: parent.verticalCenter
 
       // CPU row
       Row {
+        width: parent.width
         spacing: root.compactLayout ? 6 : 8
         visible: root.sensorList.indexOf("cpu") !== -1 && root.cpuAvailable
         Rectangle {
@@ -323,6 +339,8 @@ BorderSurface {
           Behavior on color { ColorAnimation { duration: 300 } }
         }
         Text {
+          width: parent.width - 6 - parent.spacing
+          elide: Text.ElideRight
           textFormat: Text.PlainText
           text: "CPU  " + root.formatTemp(root.getTemp("CPU")) + root.unitSymbol
           color: root.textColor
@@ -334,6 +352,7 @@ BorderSurface {
 
       // GPU row
       Row {
+        width: parent.width
         spacing: root.compactLayout ? 6 : 8
         visible: root.sensorList.indexOf("gpu") !== -1 && root.gpuAvailable
         Rectangle {
@@ -343,6 +362,8 @@ BorderSurface {
           Behavior on color { ColorAnimation { duration: 300 } }
         }
         Text {
+          width: parent.width - 6 - parent.spacing
+          elide: Text.ElideRight
           textFormat: Text.PlainText
           text: "GPU  " + root.formatTemp(root.getTemp("GPU")) + root.unitSymbol
           color: root.textColor
@@ -354,6 +375,7 @@ BorderSurface {
 
       // Fan row
       Row {
+        width: parent.width
         spacing: root.compactLayout ? 6 : 8
         visible: root.showFan && root.fanRpm >= 0
         Rectangle {
@@ -362,6 +384,8 @@ BorderSurface {
           anchors.verticalCenter: parent.verticalCenter
         }
         Text {
+          width: parent.width - 6 - parent.spacing
+          elide: Text.ElideRight
           textFormat: Text.PlainText
           text: root.fanRpm >= 1000 ? "FAN  " + (root.fanRpm / 1000).toFixed(1) + "k" : "FAN  " + root.fanRpm
           color: root.textColor

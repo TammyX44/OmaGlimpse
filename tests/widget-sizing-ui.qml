@@ -72,11 +72,11 @@ ShellRoot {
             var natural = card.naturalCardHeight
             configure(card, w, 80)
             wait(30)
-            compare(card.height, Math.max(80, card.naturalCardHeight))
+            compare(card.height, Math.max(80, card.minimumCardHeight))
             assertContentFits(card)
             configure(card, w, Math.ceil(natural + 100))
             wait(30)
-            compare(card.height, Math.ceil(natural + 100))
+            compare(card.height, Math.max(Math.ceil(natural + 100), card.minimumCardHeight))
             assertContentFits(card)
             configure(card, w, 0)
             wait(30)
@@ -88,7 +88,12 @@ ShellRoot {
         configure(processes, 330, 80)
         processes.processes = Array.from({length:15}, function(_, i) { return {name:"demo " + i,cpu:i,mem:1} })
         wait(50)
-        verify(processes.height > 400)
+        compare(processes.height, Math.max(80, processes.minimumCardHeight))
+        var processViewport = findChild(processes, "listCardViewport")
+        verify(processViewport !== null)
+        verify(processViewport.contentHeight > processViewport.height)
+        processViewport.contentY = processViewport.contentHeight - processViewport.height
+        verify(processViewport.contentY > 0)
         assertContentFits(processes)
         configure(disk, 330, 80)
         disk.disks = [{mount:"/",used:"18G",size:"128G",avail:"110G",percent:14},
@@ -101,6 +106,52 @@ ShellRoot {
         system.config = {widgets:{systemMonitor:{cardWidth:200,cardHeight:80,showCpu:false,showRam:false,showGpu:false}}}
         wait(50)
         compare(system.height, 80)
+      }
+      function test_d_compact_matrix_keeps_dimensions_and_geometry() {
+        for (var card of cards) {
+          for (var width of [200, 330, 500]) {
+            for (var height of [80,100,120,160,220,400]) {
+              configure(card, width, height)
+              wait(50)
+              compare(card.width, width)
+              compare(card.height, Math.max(height, card.minimumCardHeight))
+              assertContentFits(card)
+              compare(card.scale, 1)
+            }
+          }
+        }
+        compare(findChild(network, "networkHistoryGraph").scale, 1)
+        configure(network, 200, 90)
+        for (var state of ["Paused", "Unavailable", "Measuring…"]) {
+          network.sampleReady = false
+          network.sampleState = state
+          wait(50)
+          verify(findChild(network, "networkInterfaceHeader").text.indexOf(state) !== -1)
+          assertContentFits(network)
+        }
+        battery.profiles = ["power-saver", "balanced", "performance"]
+        battery.profileError = "Example error with a very long message retained for accessibility"
+        for (var width of [200,330,500]) {
+          for (var height of [80,100,199,200,220]) {
+            configure(battery, width, height)
+            wait(50)
+            compare(battery.height, height)
+            assertContentFits(battery)
+          }
+        }
+        battery.profileError = ""
+        configure(temperature, 200, 80)
+        temperature.config.widgets.temperature.unit = "fahrenheit"
+        temperature.configChanged()
+        temperature.cpuAvailable = true
+        temperature.gpuAvailable = true
+        temperature.temps = [{name:"CPU",temp:99},{name:"GPU",temp:85}]
+        temperature.animatedHottestTemp = 99
+        temperature.hottestTemp = 99
+        temperature.hottestSensor = "CPU"
+        temperature.fanRpm = 12345
+        wait(50)
+        assertContentFits(temperature)
       }
       function test_c_size_rows_reset_and_keyboard() {
         for (var width of [300,460]) {
@@ -150,15 +201,20 @@ ShellRoot {
       }
       function test_z_capture_safe_fixture() {
         if (!Quickshell.env("SIZING_TEST_IMAGE") && !Quickshell.env("SIZING_GEOMETRY_ONLY")) return
-        configure(system, 500, 260)
-        configure(battery, 260, 260)
-        configure(temperature, 240, 260)
-        configure(media, 330, 250)
-        configure(processes, 330, 250)
-        configure(disk, 330, 250)
-        configure(network, 330, 280)
+        var compact = !!Quickshell.env("SIZING_COMPACT_IMAGE")
+        configure(system, 500, compact ? 110 : 0)
+        configure(battery, 260, compact ? 80 : 0)
+        configure(temperature, 240, compact ? 80 : 0)
+        configure(media, 330, compact ? 100 : 0)
+        configure(processes, 330, compact ? 100 : 0)
+        configure(disk, 330, compact ? 80 : 0)
+        configure(network, 330, compact ? 90 : 0)
         system.cpuReady = true; system.cpuValue = 18; system.cpuUser = 12
         system.memReady = true; system.memValue = 46; system.ramUsedGb = 7.2; system.ramFreeGb = 8.4
+        system.gpuMonitor = {discoveryReady:true,devices:[
+          {id:"fixture-integrated",kind:"iGPU",name:"Fixture integrated GPU",utilization:24,temp:43,status:"Ready"},
+          {id:"fixture-discrete",kind:"dGPU",name:"Fixture discrete GPU",utilization:12,temp:46,status:"Ready"}]}
+        if (compact) findChild(system, "gpuGauge").forceActiveFocus()
         battery.profiles = ["power-saver","balanced","performance"]; battery.activeProfile = "balanced"
         processes.processes = [{name:"demo-player",cpu:12.8,mem:1.2},{name:"demo-editor",cpu:4.2,mem:2.1}]
         processes.hasLoaded = true
@@ -169,7 +225,7 @@ ShellRoot {
         temperature.hottestTemp = 52; temperature.animatedHottestTemp = 52; temperature.hottestSensor = "CPU"; temperature.fanRpm = 2800
         network.sampleReady = true; network.activeInterface = "demo0"
         network.rxSpeed = 1250000; network.txSpeed = 180000; network.autoScale = 2000000
-        wait(100)
+        wait(400)
         for (var card of cards) {
           assertContentFits(card)
           verify(card.x + card.width <= preview.width)
