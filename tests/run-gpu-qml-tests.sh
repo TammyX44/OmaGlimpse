@@ -38,7 +38,7 @@ GPU_FIXTURE_DIR="$stage/fixtures" PATH="$stage/bin:$PATH" \
   XDG_RUNTIME_DIR="$stage/runtime" QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=basic QT_QUICK_BACKEND=software \
   timeout 30s qs --no-color -p "$stage/shell.qml" > "$stage/result.log" 2>&1 || status=$?
 cat "$stage/result.log"
-if [ "$status" != 0 ] || ! rg -q 'GPU_UI_TOTAL 9 passed, 0 failed' "$stage/result.log" \
+if [ "$status" != 0 ] || ! rg -q 'GPU_UI_TOTAL 10 passed, 0 failed' "$stage/result.log" \
     || rg -q 'FAIL!|ReferenceError|TypeError|Failed to load configuration|Unable to assign|Binding loop' "$stage/result.log"; then
   exit 1
 fi

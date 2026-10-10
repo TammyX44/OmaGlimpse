@@ -14,18 +14,21 @@ Item {
   property bool discoveryReady: false
   property bool animateReadings: true
   property real diameter: 110
+  property bool compact: false
+  property bool showDeviceName: true
   property color accentColor: Color.accent
   property color textColor: Color.foreground
   property color subTextColor: Qt.rgba(textColor.r, textColor.g, textColor.b, 0.6)
 
   width: root.diameter
-  height: root.diameter + 78
+  height: root.diameter + (root.compact ? 52 : 78)
 
   CircularGauge {
     objectName: "gpuRing"
     value: root.device && root.device.utilization !== null ? root.device.utilization : 0
     displayText: root.device && root.device.utilization !== null ? "" : "—"
     label: root.deviceCount > 1 ? "GPU " + (root.deviceIndex + 1) + "/" + root.deviceCount : "GPU"
+    labelSpacing: root.compact ? 3 : 8
     animateValue: root.animateReadings
     diameter: root.diameter
     accentColor: root.accentColor
@@ -34,19 +37,22 @@ Item {
   }
   Text {
     objectName: root.current ? "gpuDeviceName" : ""
-    y: root.diameter + 27
+    visible: root.showDeviceName
+    y: root.diameter + (root.compact ? 17 : 27)
     width: parent.width
-    height: 16
+    height: root.compact ? 12 : 16
     textFormat: Text.PlainText
-    text: root.device ? Gpu.displayName(root.device, root.aliases) : root.discoveryReady ? "No GPU detected" : "Detecting…"
+    text: root.device ? Gpu.displayName(root.device, root.aliases)
+      : root.compact ? (root.discoveryReady ? "None" : "…") : root.discoveryReady ? "No GPU detected" : "Detecting…"
     color: root.textColor
     font.family: Style.font.family
-    font.pixelSize: root.diameter < 64 ? 9 : 11
+    font.pixelSize: root.compact ? 10 : root.diameter < 64 ? 9 : 11
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
   }
   Text {
     objectName: root.current ? "gpuDeviceDetail" : ""
+    visible: !root.compact
     y: root.diameter + 45
     width: parent.width
     height: 16
@@ -60,15 +66,15 @@ Item {
   }
   Text {
     objectName: root.current ? "gpuDeviceStatus" : ""
-    y: root.diameter + 61
+    y: root.diameter + (root.compact ? 38 : 61)
     width: parent.width
-    height: 16
+    height: root.compact ? 13 : 16
     textFormat: Text.PlainText
     text: !root.device ? "" : root.device.status === "Ready"
       ? (root.device.temp === null ? "Active" : Math.round(root.device.temp) + "°C") : root.device.status
     color: root.subTextColor
     font.family: Style.font.family
-    font.pixelSize: root.diameter < 64 ? 8 : 10
+    font.pixelSize: root.compact ? 10 : root.diameter < 64 ? 8 : 10
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
   }

@@ -27,6 +27,7 @@ Item {
   property color labelColor: textColor    // override label color (e.g. semantic)
   property real labelSpacing: 8           // gap between gauge and label
   property bool animateValue: true
+  property bool showLabel: true
 
   readonly property real fraction: Math.max(0, Math.min(1, value / 100))
   readonly property real arcRadius: diameter / 2 - arcWidth - 2
@@ -34,7 +35,7 @@ Item {
   readonly property real sweepAngle: 360
 
   width: diameter
-  height: diameter + labelSpacing + gaugeLabel.implicitHeight
+  height: diameter + (showLabel ? labelSpacing + gaugeLabel.implicitHeight : 0)
     + (subLabel !== "" ? 4 + gaugeDetail.implicitHeight : 0)
 
   Behavior on value {
@@ -125,7 +126,7 @@ Item {
   Text {
     anchors.centerIn: shape
     width: gauge.diameter * 0.78
-    height: gauge.diameter * 0.34
+    height: Math.max(14, gauge.diameter * 0.34)
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
     fontSizeMode: Text.Fit
@@ -134,13 +135,14 @@ Item {
     minimumPixelSize: 9
     color: gauge.textColor
     font.family: Style.font.family
-    font.pixelSize: gauge.diameter * 0.24
+    font.pixelSize: Math.max(10, gauge.diameter * 0.24)
     font.bold: true
   }
 
   // Label below the gauge — small, bold, letter-spaced
   Text {
     id: gaugeLabel
+    visible: gauge.showLabel
     width: gauge.width
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
@@ -166,7 +168,7 @@ Item {
     minimumPixelSize: 7
     maximumLineCount: 1
     visible: gauge.subLabel !== ""
-    anchors.top: gaugeLabel.bottom
+    anchors.top: gauge.showLabel ? gaugeLabel.bottom : shape.bottom
     anchors.topMargin: 4
     anchors.horizontalCenter: shape.horizontalCenter
     textFormat: Text.PlainText

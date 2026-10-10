@@ -7,6 +7,8 @@ import qs.Ui
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "WidgetModel.js" as Model
+import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Battery & power card: circular charge gauge, status text, and
 // power profile picker. Config-driven colors and refresh interval.
@@ -22,6 +24,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
 
   // --- Config-driven settings ---
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
@@ -30,7 +35,15 @@ BorderSurface {
   readonly property bool showPower: root.widgetCfg.showPower !== false
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
-  readonly property real effectiveGaugeDiameter: Math.max(60, Math.min(widgetGaugeDiameter, root.width - 32))
+  readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
+  readonly property bool compactLayout: root.requestedHeight > 0 && root.requestedHeight < 200
+  readonly property real minimumCardHeight: 80
+  readonly property bool profilesVisible: root.showProfiles && root.profiles.length > 0
+  readonly property real effectiveGaugeDiameter: root.requestedHeight > 0
+    ? Math.max(root.compactLayout ? 34 : 60, Math.min(root.widgetGaugeDiameter, root.width - 32,
+      root.requestedHeight - (root.compactLayout ? 16 + (root.profilesVisible ? 30 : 0)
+        : 32 + 5 + batteryFont.height + 16 + (root.profilesVisible ? 46 : 10) + (root.profileError ? batteryFont.height + 10 : 0))))
+    : Math.max(60, Math.min(root.widgetGaugeDiameter, root.width - 32))
 
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
@@ -38,7 +51,9 @@ BorderSurface {
   padding: 16
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(260, root.widgetGaugeDiameter + 48)
-  height: content.implicitHeight + 32
+  readonly property real naturalCardHeight: content.implicitHeight + 32
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
+  FontMetrics { id: batteryFont; font.family: Style.font.family; font.pixelSize: 10 }
 
 
   readonly property var batteryDevice: UPower.displayDevice
@@ -76,6 +91,8 @@ BorderSurface {
   property string pendingProfile: ""
   property string inFlightProfile: ""
   property string profileError: ""
+  property bool activeRefreshQueued: false
+  property int confirmationReadSerial: 0
   readonly property string displayedProfile: root.pendingProfile || root.activeProfile
 
   // Linux platform_profile exposes a wider set of firmware names than
@@ -103,15 +120,36 @@ BorderSurface {
     return name.charAt(0).toUpperCase() + name.slice(1)
   }
 
-  // Refresh both the profile list and the active profile.
-  // The profile list comes from powerprofilesctl (static — rarely changes).
-  // The active profile comes from the raw sysfs file, which reflects the
-  // REAL hardware state — including changes from physical hotkeys that
-  // bypass power-profiles-daemon entirely.
+  function nativeProfileName() {
+    return Sampling.profileName(PowerProfiles.profile, PowerProfile.PowerSaver,
+      PowerProfile.Balanced, PowerProfile.Performance)
+  }
+
+  function refreshActiveProfile() {
+    // An explicit user action still needs confirmation if sampling is paused.
+    if ((!root.samplingActive || !root.showProfiles) && !root.pendingProfile) return
+    if (activeProfileProc.running) root.activeRefreshQueued = true
+    else {
+      activeProfileProc.readSerial += 1
+      activeProfileProc.running = true
+    }
+  }
+
+  // Native DBus notifications update the pill immediately; sysfs confirms
+  // hardware state and catches firmware hotkeys that bypass the daemon.
   function refreshProfiles() {
-    if (!root.showProfiles) return
+    if (!root.showProfiles || !root.samplingActive) return
     if (!profilesProc.running) profilesProc.running = true
-    if (!activeProfileProc.running) activeProfileProc.running = true
+    root.refreshActiveProfile()
+  }
+
+  Connections {
+    target: PowerProfiles
+    function onProfileChanged() {
+      root.activeProfile = root.nativeProfileName()
+      root.refreshActiveProfile()
+    }
+    function onHasPerformanceProfileChanged() { root.refreshProfiles() }
   }
 
   // Parse the profile list (names only, no active state)
@@ -137,11 +175,13 @@ BorderSurface {
   // Parse the raw sysfs active profile — this is the source of truth.
   // powerprofilesctl may disagree with this when the profile was changed
   // by a physical hotkey or other firmware-level action.
-  function updateActiveProfile(raw) {
+  function updateActiveProfile(raw, readSerial) {
+    if (!root.samplingActive && !root.pendingProfile) return
     var profile = String(raw || "").trim()
     if (profile) {
       activeProfile = profile
-      if (root.pendingProfile && !actionProc.running
+      if (root.pendingProfile && profileConfirmTimer.running && !actionProc.running
+          && readSerial >= root.confirmationReadSerial
           && root.profileMatches(root.pendingProfile, profile)) {
         root.pendingProfile = ""
         profileConfirmTimer.stop()
@@ -186,12 +226,13 @@ BorderSurface {
     + (root.showPower && root.batteryInfo.available && root.batteryInfo.power
       ? " · " + root.batteryInfo.power : "")
   onShowProfilesChanged: if (showProfiles) Qt.callLater(root.refreshProfiles)
+  onSamplingActiveChanged: if (root.samplingActive) Qt.callLater(root.refreshProfiles)
 
   // Profile list — load once at startup (rarely changes).
   // Uses omarchy-powerprofiles-list if available, falls back to powerprofilesctl.
   Process {
     id: profilesProc
-    command: ["sh", "-c", "omarchy-powerprofiles-list 2>/dev/null || powerprofilesctl list 2>/dev/null | awk '/^\\s*[* ]\\s*[a-zA-Z0-9-]+:$/{gsub(/^[*[:space:]]+|:$/,\"\"); print}' | tac"]
+    command: ["timeout", "--kill-after=1s", "3s", "sh", "-c", "omarchy-powerprofiles-list 2>/dev/null || powerprofilesctl list 2>/dev/null | awk '/^\\s*[* ]\\s*[a-zA-Z0-9-]+:$/{gsub(/^[*[:space:]]+|:$/,\"\"); print}' | tac"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateProfileList(text) }
   }
 
@@ -201,23 +242,29 @@ BorderSurface {
   // On systems without the ACPI platform profile driver, fall back to powerprofilesctl.
   Process {
     id: activeProfileProc
-    command: ["sh", "-c", "cat /sys/firmware/acpi/platform_profile 2>/dev/null || powerprofilesctl get 2>/dev/null || echo ''"]
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateActiveProfile(text) }
+    objectName: "hardwareProfileProcess"
+    property int readSerial: 0
+    command: ["timeout", "--kill-after=1s", "2s", "sh", "-c", "cat /sys/firmware/acpi/platform_profile 2>/dev/null || powerprofilesctl get 2>/dev/null || echo ''"]
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateActiveProfile(text, activeProfileProc.readSerial) }
+    onExited: {
+      if (!root.activeRefreshQueued) return
+      root.activeRefreshQueued = false
+      Qt.callLater(root.refreshActiveProfile)
+    }
   }
 
-  // Poll the active profile every 2 seconds for near-instant detection.
-  // The profile list is only refreshed on startup and after setting a profile.
+  // Slow hardware fallback for changes that emit no DBus notification.
   Timer {
-    interval: 2000
+    objectName: "hardwareProfileTimer"
+    interval: Sampling.interval(10000, root.samplingMultiplier)
     repeat: true
-    running: root.showProfiles
-    onTriggered: {
-      if (!activeProfileProc.running) activeProfileProc.running = true
-    }
+    running: root.samplingActive && root.showProfiles
+    onTriggered: root.refreshActiveProfile()
   }
 
   Timer {
     id: profileConfirmTimer
+    objectName: "profileConfirmationTimer"
     interval: 3000
     repeat: false
     onTriggered: {
@@ -240,17 +287,18 @@ BorderSurface {
       if (exitCode !== 0) {
         root.pendingProfile = ""
         root.profileError = "Could not change power profile"
-      } else if (root.profileMatches(root.activeProfile, completed)) {
-        root.pendingProfile = ""
-        root.profileError = ""
       } else {
+        // Never confirm using a pre-action reading or just the DBus signal.
+        root.confirmationReadSerial = activeProfileProc.readSerial + 1
         profileConfirmTimer.restart()
       }
       root.refreshProfiles()
+      root.refreshActiveProfile()
     }
   }
 
   Component.onCompleted: {
+    root.activeProfile = root.nativeProfileName()
     root.refreshProfiles()
   }
 
@@ -260,17 +308,22 @@ BorderSurface {
 
   Column {
     id: content
-    width: root.width - 24
+    objectName: "widgetSizingContent"
+    width: root.width - (root.compactLayout ? 16 : 24)
     anchors.centerIn: parent
-    spacing: 10
+    spacing: root.compactLayout ? 4 : 10
 
-    Row {
-      spacing: 16
-      anchors.horizontalCenter: parent.horizontalCenter
+    Item {
+      width: parent.width
+      height: root.compactLayout ? Math.max(batteryGauge.height, batterySummary.height)
+        : batteryGauge.height + 10 + batterySummary.height
 
       CircularGauge {
+        id: batteryGauge
+        x: root.compactLayout ? 0 : (parent.width - width) / 2
         value: root.batteryFraction * 100
         label: "BATTERY"
+        showLabel: !root.compactLayout
         labelSpacing: 5
         arcWidth: 3
         displayText: root.batteryInfo.available ? "" : "—"
@@ -280,24 +333,26 @@ BorderSurface {
         subTextColor: Theme.resolveMutedColor(root.textColor)
         diameter: root.effectiveGaugeDiameter
       }
-    }
-
     Text {
-      width: parent.width
+      id: batterySummary
+      x: root.compactLayout ? batteryGauge.width + 8 : 0
+      y: root.compactLayout ? (parent.height - height) / 2 : batteryGauge.height + 10
+      width: root.compactLayout ? parent.width - batteryGauge.width - 8 : parent.width
       height: 16
-      text: root.compactSummary
+      text: root.compactLayout && root.profileError ? root.profileError : root.compactSummary
       textFormat: Text.PlainText
-      color: Theme.resolveMutedColor(root.textColor)
+      color: root.compactLayout && root.profileError ? Color.urgent : Theme.resolveMutedColor(root.textColor)
       font.family: Style.font.family
       font.pixelSize: 11
-      minimumPixelSize: 8
+      minimumPixelSize: 10
       fontSizeMode: Text.Fit
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
       maximumLineCount: 1
       elide: Text.ElideRight
       Accessible.role: Accessible.StaticText
-      Accessible.name: root.compactSummary
+      Accessible.name: root.profileError || root.compactSummary
+    }
     }
 
     Row {
@@ -305,7 +360,7 @@ BorderSurface {
       width: parent.width
       spacing: 6
       anchors.horizontalCenter: parent.horizontalCenter
-      visible: root.showProfiles && root.profiles.length > 0
+      visible: root.profilesVisible
 
       Repeater {
         model: root.profiles
@@ -376,14 +431,16 @@ BorderSurface {
 
     Text {
       width: parent.width
-      visible: root.profileError !== ""
+      visible: root.profileError !== "" && !root.compactLayout
       textFormat: Text.PlainText
       text: root.profileError
       color: Color.urgent
       font.family: Style.font.family
       font.pixelSize: 10
       horizontalAlignment: Text.AlignHCenter
-      wrapMode: Text.WordWrap
+      wrapMode: root.requestedHeight > 0 ? Text.NoWrap : Text.WordWrap
+      elide: Text.ElideRight
+      Accessible.name: root.profileError
     }
   }
 }

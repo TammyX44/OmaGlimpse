@@ -8,6 +8,11 @@ function defaultConfig() {
   return {
     version: 3,
     gpuLayoutRevision: 1,
+    editor: { snapToGrid: true, snapToCards: true, gridSize: 8 },
+    namedLayouts: {},
+    monitorLayouts: {},
+    monitorDisplays: {},
+    activeMonitorLayout: "",
     themeMode: "theme",
     colors: {
       accent: "",
@@ -37,6 +42,7 @@ function defaultConfig() {
         gpuDevice: "",
         gpuAliases: {},
         cardWidth: 0,
+        cardHeight: 0,
         gaugeDiameter: 110
       },
       battery: {
@@ -47,6 +53,7 @@ function defaultConfig() {
         showProfiles: true,
         showPower: true,
         cardWidth: 0,
+        cardHeight: 0,
         gaugeDiameter: 94
       },
       media: {
@@ -56,7 +63,8 @@ function defaultConfig() {
         refreshInterval: 3000,
         showAlbumArt: true,
         showControls: true,
-        cardWidth: 0
+        cardWidth: 0,
+        cardHeight: 0
       },
       topProcesses: {
         enabled: true,
@@ -65,7 +73,8 @@ function defaultConfig() {
         refreshInterval: 3000,
         processCount: 5,
         sortBy: "cpu",
-        cardWidth: 0
+        cardWidth: 0,
+        cardHeight: 0
       },
       networkSpeed: {
         enabled: false,
@@ -73,7 +82,11 @@ function defaultConfig() {
         y: -1,
         refreshInterval: 1000,
         interface: "auto",
+        scaleMode: "auto",
+        scaleLimitMbps: 5,
+        showHistory: true,
         cardWidth: 0,
+        cardHeight: 0,
         gaugeDiameter: 110
       },
       diskUsage: {
@@ -82,7 +95,8 @@ function defaultConfig() {
         y: -1,
         refreshInterval: 30000,
         mounts: [],
-        cardWidth: 0
+        cardWidth: 0,
+        cardHeight: 0
       },
       temperature: {
         enabled: false,
@@ -93,7 +107,8 @@ function defaultConfig() {
         showFan: true,
         unit: "celsius",
         fanMaxRpm: 5000,
-        cardWidth: 0
+        cardWidth: 0,
+        cardHeight: 0
       }
     }
   }
@@ -124,6 +139,13 @@ function bounded(value, fallback, minimum, maximum) {
   if (value === null || value === undefined || String(value).trim() === "") return fallback
   var n = Number(value)
   return isFinite(n) ? Math.max(minimum, Math.min(maximum, n)) : fallback
+}
+
+function cardHeightOrAuto(value) {
+  if (typeof value !== "number" && typeof value !== "string") return 0
+  if (String(value).trim() === "") return 0
+  var n = Number(value)
+  return !isFinite(n) || n === 0 ? 0 : Math.max(80, Math.min(1000, Math.round(n)))
 }
 
 function parseConfigResult(raw) {
@@ -177,6 +199,14 @@ function parseConfig(raw) {
 
   var defaults = defaultConfig()
   cfg = deepMerge(defaults, cfg)
+  if (!plainObject(cfg.editor)) cfg.editor = defaults.editor
+  cfg.editor.snapToGrid = cfg.editor.snapToGrid !== false
+  cfg.editor.snapToCards = cfg.editor.snapToCards !== false
+  cfg.editor.gridSize = bounded(cfg.editor.gridSize, 8, 4, 64)
+  for (var mapKey of ["namedLayouts", "monitorLayouts", "monitorDisplays"]) {
+    if (!plainObject(cfg[mapKey])) cfg[mapKey] = {}
+  }
+  cfg.activeMonitorLayout = typeof cfg.activeMonitorLayout === "string" ? cfg.activeMonitorLayout : ""
   // Older saved positions predate the extra GPU labels. Repair them once,
   // after the rendered card sizes are available, rather than guessing here.
   cfg.gpuLayoutRevision = !trimmed || saved.gpuLayoutRevision === 1 ? 1 : 0
@@ -197,6 +227,7 @@ function parseConfig(raw) {
       if (typeof fallback[key] === "boolean" && typeof widget[key] !== "boolean") widget[key] = fallback[key]
     }
     widget.cardWidth = Number(widget.cardWidth) === 0 ? 0 : bounded(widget.cardWidth, 0, 200, 500)
+    widget.cardHeight = cardHeightOrAuto(widget.cardHeight)
     widget.refreshInterval = bounded(widget.refreshInterval, fallback.refreshInterval, 500, 30000)
     if (widget.gaugeDiameter !== undefined) {
       var maxGauge = wid === "battery" ? 100 : 160
@@ -227,6 +258,8 @@ function parseConfig(raw) {
   monitor.gpuAliases = aliases
   cfg.widgets.diskUsage.mounts = Array.isArray(cfg.widgets.diskUsage.mounts)
     ? cfg.widgets.diskUsage.mounts.filter(function(mount) { return typeof mount === "string" && mount.charAt(0) === "/" }) : []
+  cfg.widgets.networkSpeed.scaleMode = cfg.widgets.networkSpeed.scaleMode === "fixed" ? "fixed" : "auto"
+  cfg.widgets.networkSpeed.scaleLimitMbps = bounded(cfg.widgets.networkSpeed.scaleLimitMbps, 5, 0.01, 100000)
   return cfg
 }
 

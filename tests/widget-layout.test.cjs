@@ -15,7 +15,7 @@ for (const preset of ['left', 'right', 'center', 'top', 'bottom', 'spread']) {
         config: { widgets: Object.fromEntries(ids.map(id => [id, { x: -99, y: -99 }])) },
         allEnabledIds: ids, width: 1536, height: 864, barOffset: 26,
         edgeMargin: 24, dockOffset: 60, cardSpacing: 12,
-        updateLayoutIds() {}, widgetConfigRefresh() {}, saveConfig() {}
+        updateLayoutIds() {}, widgetConfigRefresh() {}, saveConfig() {}, recordLayoutChange() {}
       }
       const context = { root, shallowClone: x => ({ ...x }), cardHeightFor: () => 100,
         cardWidthFor: () => 220, relayoutTimer: { restart() {} } }

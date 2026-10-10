@@ -134,6 +134,31 @@ ShellRoot {
         mouseClick(findChild(slot, "previousGpu"), 12, 12)
         compare(slot.device.id, root.fixture[0].id)
       }
+      function test_compact_selector_geometry_and_focus() {
+        var cfg = Config.deepMerge({}, root.testConfig)
+        cfg.widgets.systemMonitor.cardWidth = 200
+        cfg.widgets.systemMonitor.cardHeight = 100
+        root.testConfig = cfg
+        wait(50)
+        compare(card.height, 110)
+        compare(slot.compact, true)
+        slot.animationsEnabled = false
+        slot.forceActiveFocus()
+        var previous = findChild(slot, "previousGpu")
+        var next = findChild(slot, "nextGpu")
+        verify(previous.visible && next.visible)
+        verify(previous.x + previous.width <= next.x)
+        compare(findChild(slot, "gpuDeviceName").visible, false)
+        verify(previous.y >= findChild(slot.currentPage, "gpuRing").height)
+        verify(next.y + next.height <= findChild(slot, "gpuDeviceStatus").y)
+        next.forceActiveFocus()
+        keyClick(Qt.Key_Return)
+        compare(slot.device.id, root.fixture[1].id)
+        previous.forceActiveFocus()
+        keyClick(Qt.Key_Return)
+        compare(slot.device.id, root.fixture[0].id)
+        verify(previous.visible && next.visible)
+      }
       function test_edit_and_click_through() {
         card.editMode = true
         mouseWheel(slot, 50, 50, 0, -120)

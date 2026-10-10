@@ -6,6 +6,8 @@ import qs.Commons
 import qs.Ui
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
+import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Media now-playing card.
 // Player selection follows the same priority pattern as Omarchy's
@@ -30,6 +32,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property bool showAlbumArt: root.widgetCfg.showAlbumArt !== false
@@ -42,10 +47,40 @@ BorderSurface {
   padding: 0
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 340
-  // Reserve the playback footprint even while no player or duration is
-  // available. Neighbouring cards may have saved positions below this one.
-  height: trackInfo.height + seekRow.height + content.spacing
-    + (root.showControls ? transportRow.height + content.spacing : 0) + 24
+  // Auto keeps the original footprint in every playback state. These defaults
+  // must not depend on the compressed rows, content height, or resolved height.
+  readonly property real naturalCardHeight: 64 + 20 + 14 + (root.showControls ? 44 + 14 : 0) + 24
+  readonly property real minimumCardHeight: root.showControls ? 100 : 80
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
+
+  readonly property bool compactLayout: root.height < root.naturalCardHeight
+  readonly property bool inlineControls: root.compactLayout && root.showControls && root.width >= 360
+  readonly property bool compactMetadata: root.compactLayout && !root.inlineControls && root.height < 140
+  readonly property bool stackedArtwork: root.showAlbumArt && root.width < 280 && root.height >= 260
+  readonly property real contentMargin: root.compactLayout ? 6 : 16
+  readonly property real contentInsets: root.compactLayout ? 12 : 24
+  readonly property real layoutSpacing: root.compactLayout ? 4 : 14
+  readonly property real seekRowHeight: root.compactLayout ? 24 : 20
+  readonly property real transportButtonSize: root.compactLayout
+    ? Math.max(28, Math.min(44, 28 + (root.height - root.minimumCardHeight) / 4)) : 44
+  readonly property real transportSpacing: root.compactLayout ? 4 : 8
+  readonly property real metadataHeight: root.compactMetadata ? 28 : 54
+  readonly property real trackRowHeight: root.compactLayout
+    ? root.height - root.contentInsets - root.seekRowHeight - root.layoutSpacing
+      - (root.showControls && !root.inlineControls ? root.transportButtonSize + root.layoutSpacing : 0)
+    : (root.stackedArtwork
+      ? Math.min(root.width - 2 * root.contentMargin + root.metadataHeight + root.layoutSpacing,
+          root.height - root.contentInsets - root.seekRowHeight - root.layoutSpacing
+            - (root.showControls ? root.transportButtonSize + root.layoutSpacing : 0))
+      : Math.min(128, 64 + Math.max(0, root.height - root.naturalCardHeight)))
+  readonly property real artworkDiameter: root.stackedArtwork
+    ? root.trackRowHeight - root.metadataHeight - root.layoutSpacing
+    : Math.min(root.trackRowHeight, Math.max(28, root.width - 2 * root.contentMargin - root.layoutSpacing
+        - (root.inlineControls ? 3 * root.transportButtonSize + 2 * root.transportSpacing + root.layoutSpacing : 0) - 90))
+  // Reserve seek space for unknown durations too; metadata/state cannot change
+  // the card's height or introduce a content -> height -> content binding loop.
+  readonly property real playbackContentHeight: root.trackRowHeight + root.seekRowHeight + root.layoutSpacing
+    + (root.showControls && !root.inlineControls ? root.transportButtonSize + root.layoutSpacing : 0)
 
   // ── Player selection (mirrors Omarchy Service.qml logic) ──
 
@@ -139,7 +174,7 @@ BorderSurface {
       root.artworkProcess = null
     }
     root.artworkSource = ""
-    if (!root.showAlbumArt || !root.hasMedia) return
+    if (root.samplingActive === false || !root.showAlbumArt || !root.hasMedia) return
 
     var url = String(root.artUrl)
     if ((url.startsWith("/") && !url.startsWith("//"))
@@ -206,67 +241,79 @@ BorderSurface {
   readonly property bool canSeek: !!(activePlayer && activePlayer.canSeek
     && activePlayer.positionSupported && trackLength > 0)
   property real livePosition: 0
+  property real positionSampleAt: Date.now()
   property bool seeking: false
   property real seekPreview: 0
   readonly property real shownPosition: seeking ? seekPreview : livePosition
   readonly property real progress: trackLength > 0 ? Math.max(0, Math.min(1, shownPosition / trackLength)) : 0
+
+  function syncPosition() {
+    root.positionSampleAt = Date.now()
+    if (!root.samplingActive || root.seeking) return
+    root.livePosition = root.activePlayer && root.activePlayer.position >= 0
+      ? root.activePlayer.position : 0
+  }
+  onSamplingActiveChanged: {
+    root.seeking = false
+    root.syncPosition()
+    root.refreshArtwork()
+  }
+  onIsPlayingChanged: root.syncPosition()
 
   // Sync from real MPRIS position when it changes
   Connections {
     target: root.activePlayer
     ignoreUnknownSignals: true
     function onPositionChanged() {
-      if (!root.seeking && root.activePlayer && root.activePlayer.position >= 0) {
-        root.livePosition = root.activePlayer.position
-      }
+      root.syncPosition()
     }
     function onTrackTitleChanged() {
-      root.livePosition = root.activePlayer ? (root.activePlayer.position || 0) : 0
+      root.syncPosition()
     }
     function onLengthChanged() {
-      root.livePosition = root.activePlayer ? (root.activePlayer.position || 0) : 0
+      root.syncPosition()
     }
   }
 
   // Reset when active player changes
   onActivePlayerChanged: {
-    root.livePosition = root.activePlayer ? (root.activePlayer.position || 0) : 0
+    root.syncPosition()
   }
 
   Component.onCompleted: {
     root.refreshArtwork()
-    if (root.activePlayer && root.activePlayer.position >= 0) {
-      root.livePosition = root.activePlayer.position
-    }
+    root.syncPosition()
   }
 
-  // Tick forward 1 second while playing
+  // Use elapsed time so slowing the timer does not slow track progress.
   Timer {
     id: positionTimer
-    interval: 1000
+    objectName: "mediaPositionTimer"
+    interval: Sampling.interval(1000, root.samplingMultiplier)
     repeat: true
-    running: root.isPlaying && root.trackLength > 0
+    running: root.samplingActive && root.isPlaying && root.trackLength > 0
     onTriggered: {
-      if (root.livePosition < root.trackLength) {
-        root.livePosition += 1
-      } else {
-        root.livePosition = root.trackLength
-      }
+      var now = Date.now()
+      root.livePosition = Math.min(root.trackLength,
+        root.livePosition + Math.max(0, now - root.positionSampleAt) / 1000)
+      root.positionSampleAt = now
     }
   }
 
   // Periodic sync to correct drift (many players don't emit positionChanged)
   Timer {
     id: positionSyncTimer
-    interval: 5000
+    objectName: "mediaPositionSyncTimer"
+    interval: Sampling.interval(5000, root.samplingMultiplier)
     repeat: true
-    running: root.hasMedia && root.activePlayer !== null
+    running: root.samplingActive && root.hasMedia && root.activePlayer !== null
     onTriggered: {
       if (root.activePlayer && root.activePlayer.position >= 0) {
         var realPos = root.activePlayer.position
         var diff = Math.abs(realPos - root.livePosition)
         if (diff > 3) {
           root.livePosition = realPos
+          root.positionSampleAt = Date.now()
         }
       }
     }
@@ -311,6 +358,7 @@ BorderSurface {
     var newPos = root.seekPreview
     root.seeking = false
     root.livePosition = newPos
+    root.positionSampleAt = Date.now()
     root.activePlayer.position = newPos
   }
 
@@ -326,15 +374,18 @@ BorderSurface {
 
   // ── Layout ──
 
-  Column {
+  Item {
     id: content
+    objectName: "widgetSizingContent"
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.top: parent.top
-    anchors.leftMargin: 16
-    anchors.rightMargin: 16
-    anchors.topMargin: 16
-    spacing: 14
+    anchors.leftMargin: root.contentMargin
+    anchors.rightMargin: root.contentMargin
+    anchors.topMargin: root.hasMedia
+      ? root.contentMargin + Math.max(0, (root.height - root.contentInsets - root.playbackContentHeight) / 2)
+      : root.contentMargin
+    height: root.hasMedia ? root.playbackContentHeight : root.height - 2 * root.contentMargin
 
     // --- Placeholder when no media ---
     Item {
@@ -367,19 +418,22 @@ BorderSurface {
     }
 
     // --- Track info: art + title/artist ---
-    Row {
+    Item {
       id: trackInfo
+      objectName: "mediaTrackInfo"
       visible: root.hasMedia
-      spacing: 14
       width: parent.width
-      height: 64
+      height: root.trackRowHeight
 
       // Album art thumbnail
       Rectangle {
         id: artBox
-        width: root.showAlbumArt ? 64 : 0
-        height: 64
-        radius: 12
+        objectName: "mediaArtwork"
+        width: root.showAlbumArt ? root.artworkDiameter : 0
+        height: width
+        x: root.stackedArtwork ? (parent.width - width) / 2 : 0
+        y: root.stackedArtwork ? 0 : (parent.height - height) / 2
+        radius: Math.min(12, width / 4)
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.06)
         clip: true
         visible: root.showAlbumArt
@@ -404,40 +458,64 @@ BorderSurface {
 
       // Title + artist + player name
       Column {
-        width: parent.width - artBox.width - (root.showAlbumArt ? 14 : 0)
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 4
+        id: metadata
+        objectName: "mediaMetadata"
+        x: root.stackedArtwork ? 0 : artBox.width + (root.showAlbumArt ? root.layoutSpacing : 0)
+        y: root.stackedArtwork ? artBox.height + root.layoutSpacing : (parent.height - height) / 2
+        width: parent.width - x
+          - (root.inlineControls ? transportRow.width + root.layoutSpacing : 0)
+        height: root.metadataHeight
+        spacing: root.compactMetadata ? 0 : 4
 
         Text {
+          objectName: "mediaTitle"
           textFormat: Text.PlainText
           text: root.title
           color: root.textColor
           font.family: Style.font.family
-          font.pixelSize: 14
+          font.pixelSize: root.compactMetadata ? 12 : 14
           font.bold: true
+          height: root.compactMetadata ? 14 : 18
+          lineHeightMode: Text.FixedHeight
+          lineHeight: height
           elide: Text.ElideRight
           width: parent.width
+          Accessible.role: Accessible.StaticText
+          Accessible.name: root.title
         }
 
         Text {
+          objectName: "mediaArtist"
           textFormat: Text.PlainText
-          text: root.artist
+          text: root.compactMetadata
+            ? root.artist + (root.artist && root.identity ? " · " : "") + root.identity : root.artist
           color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.55)
           font.family: Style.font.family
-          font.pixelSize: 11
+          font.pixelSize: root.compactMetadata ? 10 : 11
+          height: 14
+          lineHeightMode: Text.FixedHeight
+          lineHeight: height
           elide: Text.ElideRight
           width: parent.width
+          Accessible.role: Accessible.StaticText
+          Accessible.name: text
         }
 
         Text {
+          objectName: "mediaIdentity"
           textFormat: Text.PlainText
           text: root.identity
           color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: 9
+          font.pixelSize: 10
+          height: 14
+          lineHeightMode: Text.FixedHeight
+          lineHeight: height
           elide: Text.ElideRight
           width: parent.width
-          visible: text !== ""
+          visible: !root.compactMetadata && text !== ""
+          Accessible.role: Accessible.StaticText
+          Accessible.name: root.identity
         }
       }
     }
@@ -445,13 +523,19 @@ BorderSurface {
     // --- Seekable progress bar ---
     Item {
       id: seekRow
+      objectName: "mediaSeekRow"
       width: parent.width
-      height: 20
+      height: root.seekRowHeight
+      y: trackInfo.height + root.layoutSpacing
       visible: root.hasMedia && root.trackLength > 0
 
       MouseArea {
         id: seekArea
-        anchors.fill: parent
+        objectName: "mediaSeekArea"
+        x: progressTrack.x
+        width: progressTrack.width
+        height: Math.max(24, parent.height)
+        anchors.verticalCenter: parent.verticalCenter
         enabled: root.canSeek
         cursorShape: root.canSeek ? Qt.PointingHandCursor : Qt.ArrowCursor
         preventStealing: true
@@ -469,15 +553,18 @@ BorderSurface {
 
       Rectangle {
         id: progressTrack
-        anchors.verticalCenter: parent.verticalCenter
-        width: parent.width
+        objectName: "mediaProgressTrack"
+        x: root.compactLayout ? elapsedTime.width + 6 : 0
+        y: root.compactLayout ? (parent.height - height) / 2 : 0
+        width: root.compactLayout ? parent.width - x - durationTime.width - 6 : parent.width
         height: 5
         radius: 2.5
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.1)
       }
 
       Rectangle {
-        anchors.verticalCenter: parent.verticalCenter
+        x: progressTrack.x
+        y: progressTrack.y
         width: progressTrack.width * root.progress
         height: 5
         radius: 2.5
@@ -490,50 +577,63 @@ BorderSurface {
         height: 10
         radius: 5
         color: root.accentColor
-        anchors.verticalCenter: parent.verticalCenter
-        x: progressTrack.width * root.progress - 5
+        // Clamp the thumb inside the track at both ends, including tiny cards.
+        y: progressTrack.y - 2.5
+        x: progressTrack.x + Math.max(0, Math.min(progressTrack.width - width, progressTrack.width * root.progress - 5))
         visible: seekArea.containsMouse || seekArea.pressed
-        scale: seekArea.pressed ? 1.3 : 1.0
-
-        Behavior on scale { NumberAnimation { duration: 100 } }
       }
 
       Text {
+        id: elapsedTime
+        objectName: "mediaElapsedTime"
         textFormat: Text.PlainText
         text: root.formatTime(root.shownPosition)
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
         font.family: Style.font.family
-        font.pixelSize: 9
+        font.pixelSize: 10
+        width: Math.min(implicitWidth, parent.width * 0.22)
+        height: 14
+        elide: Text.ElideRight
+        Accessible.name: text
         anchors.left: parent.left
-        anchors.top: progressTrack.bottom
-        anchors.topMargin: 3
+        y: root.compactLayout ? (parent.height - height) / 2 : 6
       }
 
       Text {
+        id: durationTime
+        objectName: "mediaDurationTime"
         textFormat: Text.PlainText
         text: root.formatTime(root.trackLength)
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
         font.family: Style.font.family
-        font.pixelSize: 9
+        font.pixelSize: 10
+        width: Math.min(implicitWidth, parent.width * 0.22)
+        height: 14
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignRight
+        Accessible.name: text
         anchors.right: parent.right
-        anchors.top: progressTrack.bottom
-        anchors.topMargin: 3
+        y: root.compactLayout ? (parent.height - height) / 2 : 6
       }
     }
 
     // --- Controls: prev / play-pause / next ---
     Row {
       id: transportRow
-      spacing: 8
-      anchors.horizontalCenter: parent.horizontalCenter
+      objectName: "mediaTransportRow"
+      spacing: root.transportSpacing
+      x: root.inlineControls ? parent.width - width : (parent.width - width) / 2
+      y: root.inlineControls ? (trackInfo.height - height) / 2
+        : trackInfo.height + root.layoutSpacing + (seekRow.visible ? seekRow.height + root.layoutSpacing : 0)
       visible: root.showControls && root.hasMedia
-      height: 44
+      height: root.transportButtonSize
 
       // Previous
       Item {
         id: previousButton
-        width: 44
-        height: 44
+        objectName: "mediaPreviousButton"
+        width: root.transportButtonSize
+        height: width
         anchors.verticalCenter: parent.verticalCenter
         enabled: root.canRunAction("previous", root.activePlayer)
         activeFocusOnTab: enabled
@@ -563,10 +663,8 @@ BorderSurface {
           color: prevHover.containsMouse || previousButton.activeFocus ? root.textColor
             : Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: 20
+          font.pixelSize: root.compactLayout ? 16 : 20
           anchors.centerIn: parent
-          scale: prevHover.containsMouse ? 1.15 : 1.0
-          Behavior on scale { NumberAnimation { duration: 100 } }
         }
 
         MouseArea {
@@ -585,9 +683,10 @@ BorderSurface {
       // Play/Pause
       Rectangle {
         id: playPauseButton
-        width: 44
-        height: 44
-        radius: 22
+        objectName: "mediaPlayPauseButton"
+        width: root.transportButtonSize
+        height: width
+        radius: width / 2
         color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.18)
         border.color: activeFocus
           ? root.accentColor
@@ -597,7 +696,6 @@ BorderSurface {
         enabled: root.canRunAction("playPause", root.activePlayer)
         activeFocusOnTab: enabled
         opacity: enabled ? 1 : 0.32
-        scale: playHover.containsMouse || activeFocus ? 1.08 : 1.0
         Accessible.role: Accessible.Button
         Accessible.name: root.isPlaying ? "Pause" : "Play"
         Accessible.onPressAction: if (enabled) root.runAction("playPause")
@@ -606,14 +704,12 @@ BorderSurface {
         Keys.onEnterPressed: if (enabled) root.runAction("playPause")
         Keys.onSpacePressed: if (enabled) root.runAction("playPause")
 
-        Behavior on scale { NumberAnimation { duration: 100 } }
-
         Text {
           textFormat: Text.PlainText
           text: root.isPlaying ? "󰏤" : "󰐊"
           color: root.accentColor
           font.family: Style.font.family
-          font.pixelSize: 20
+          font.pixelSize: root.compactLayout ? 16 : 20
           anchors.centerIn: parent
         }
 
@@ -633,8 +729,9 @@ BorderSurface {
       // Next
       Item {
         id: nextButton
-        width: 44
-        height: 44
+        objectName: "mediaNextButton"
+        width: root.transportButtonSize
+        height: width
         anchors.verticalCenter: parent.verticalCenter
         enabled: root.canRunAction("next", root.activePlayer)
         activeFocusOnTab: enabled
@@ -664,10 +761,8 @@ BorderSurface {
           color: nextHover.containsMouse || nextButton.activeFocus ? root.textColor
             : Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: 20
+          font.pixelSize: root.compactLayout ? 16 : 20
           anchors.centerIn: parent
-          scale: nextHover.containsMouse ? 1.15 : 1.0
-          Behavior on scale { NumberAnimation { duration: 100 } }
         }
 
         MouseArea {

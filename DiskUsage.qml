@@ -1,10 +1,13 @@
 import QtQuick
+import QtQuick.Controls as Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
+import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Disk usage card: per-mount usage bars with size/used/avail.
 BorderSurface {
@@ -18,6 +21,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property int refreshInterval: Config.widgetRefreshInterval(root.config, root.widgetId)
@@ -25,7 +31,7 @@ BorderSurface {
     ? root.widgetCfg.mounts : []
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   readonly property var diskCommand: {
-    var args = ["env", "LC_ALL=C", "df", "-h", "--output=target,size,used,avail,pcent,source"]
+    var args = ["timeout", "--kill-after=1s", "5s", "env", "LC_ALL=C", "df", "-h", "--output=target,size,used,avail,pcent,source"]
     if (root.mountFilter.length > 0) args.push("--")
     for (var i = 0; i < root.mountFilter.length; i++) {
       var mount = String(root.mountFilter[i] || "").trim()
@@ -37,10 +43,19 @@ BorderSurface {
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
   radius: root.cardRadius
-  padding: 20
+  padding: root.compactHeight ? 8 : 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 300
-  height: content.implicitHeight + 40
+  // Keep Auto's original measurement independent of the clipped list height.
+  readonly property real naturalCardHeight: heading.implicitHeight + listContent.implicitHeight
+    + (listContent.implicitHeight > 0 ? 10 : 0) + 40
+  readonly property real minimumCardHeight: Math.max(80, 16 + heading.implicitHeight + 4
+    + diskNameMetrics.height + 8 + 6 + diskDetailMetrics.height)
+  readonly property bool compactHeight: root.height < root.naturalCardHeight
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
+
+  FontMetrics { id: diskNameMetrics; font.family: Style.font.family; font.pixelSize: 11; font.bold: true }
+  FontMetrics { id: diskDetailMetrics; font.family: Style.font.family; font.pixelSize: 9 }
 
 
   property var disks: []
@@ -53,8 +68,11 @@ BorderSurface {
   property bool stderrReady: false
   property bool exitReady: false
   property bool refreshQueued: false
+  property int sampleEpoch: 0
+  property int pendingSampleEpoch: 0
 
   function refresh() {
+    if (!root.samplingActive) return
     if (diskProc.running) {
       root.refreshQueued = true
       return
@@ -65,6 +83,13 @@ BorderSurface {
     root.stdoutReady = false
     root.stderrReady = false
     root.exitReady = false
+    root.pendingSampleEpoch = root.sampleEpoch
+    if (!root.samplingActive) { root.refreshQueued = false; return }
+    if (root.pendingSampleEpoch !== root.sampleEpoch) {
+      root.refreshQueued = false
+      Qt.callLater(root.refresh)
+      return
+    }
     diskProc.running = true
   }
 
@@ -90,6 +115,7 @@ BorderSurface {
 
   Process {
     id: diskProc
+    objectName: "diskSamplingProcess"
     command: root.diskCommand
     stdout: StdioCollector {
       waitForEnd: true
@@ -115,26 +141,37 @@ BorderSurface {
   }
 
   Timer {
-    interval: root.refreshInterval
-    running: true
+    objectName: "diskSamplingTimer"
+    interval: Sampling.interval(root.refreshInterval, root.samplingMultiplier)
+    running: root.samplingActive
     repeat: true
     onTriggered: root.refresh()
   }
 
   Component.onCompleted: root.refresh()
   onMountFilterChanged: Qt.callLater(function() { root.refresh() })
+  onSamplingActiveChanged: {
+    root.sampleEpoch += 1
+    if (root.samplingActive) Qt.callLater(root.refresh)
+    else {
+      root.refreshQueued = false
+      diskProc.running = false
+    }
+  }
 
-  Column {
+  Item {
     id: content
+    objectName: "widgetSizingContent"
     anchors.left: parent.left
     anchors.right: parent.right
-    anchors.top: parent.top
+    anchors.verticalCenter: parent.verticalCenter
     anchors.leftMargin: 20
     anchors.rightMargin: 20
-    anchors.topMargin: 20
-    spacing: 10
+    height: Math.min(heading.implicitHeight + listViewport.anchors.topMargin + listContent.implicitHeight,
+      Math.max(0, root.height - 2 * root.padding))
 
     Text {
+      id: heading
       textFormat: Text.PlainText
       text: "DISK USAGE"
       color: root.textColor
@@ -144,105 +181,174 @@ BorderSurface {
       font.letterSpacing: 1.5
     }
 
-    Text {
-      width: parent.width
-      visible: !root.hasLoaded && root.disks.length === 0
-      textFormat: Text.PlainText
-      text: "Loading disk usage..."
-      color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
-      font.family: Style.font.family
-      font.pixelSize: 11
-    }
+    Flickable {
+      id: listViewport
+      objectName: "listCardViewport"
+      anchors.top: heading.bottom
+      anchors.topMargin: listContent.implicitHeight > 0 ? (root.compactHeight ? 4 : 10) : 0
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      clip: true
+      contentWidth: width
+      contentHeight: listContent.implicitHeight
+      flickableDirection: Flickable.VerticalFlick
+      boundsBehavior: Flickable.StopAtBounds
+      activeFocusOnTab: true
+      Accessible.role: Accessible.List
+      Accessible.name: "Disk usage"
+      Accessible.description: "Scroll with the mouse wheel, arrow keys, Page Up or Page Down."
 
-    Text {
-      width: parent.width
-      visible: root.errorMessage !== ""
-      textFormat: Text.PlainText
-      text: root.errorMessage
-      color: Color.urgent
-      font.family: Style.font.family
-      font.pixelSize: 11
-      wrapMode: Text.WordWrap
-    }
-
-    Text {
-      width: parent.width
-      visible: root.hasLoaded && root.errorMessage === "" && root.disks.length === 0
-      textFormat: Text.PlainText
-      text: root.mountFilter.length > 0 ? "No matching filesystems" : "No filesystems found"
-      color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
-      font.family: Style.font.family
-      font.pixelSize: 11
-    }
-
-    Repeater {
-      model: root.disks
+      function scrollTo(position) {
+        cancelFlick()
+        contentY = Math.max(0, Math.min(position, Math.max(0, contentHeight - height)))
+      }
+      onContentHeightChanged: scrollTo(contentY)
+      onHeightChanged: scrollTo(contentY)
+      Keys.onPressed: function(event) {
+        switch (event.key) {
+        case Qt.Key_Up: scrollTo(contentY - 32); break
+        case Qt.Key_Down: scrollTo(contentY + 32); break
+        case Qt.Key_PageUp: scrollTo(contentY - height); break
+        case Qt.Key_PageDown: scrollTo(contentY + height); break
+        case Qt.Key_Home: scrollTo(0); break
+        case Qt.Key_End: scrollTo(contentHeight); break
+        default: event.accepted = false; return
+        }
+        event.accepted = true
+      }
+      TapHandler { onTapped: listViewport.forceActiveFocus() }
+      Controls.ScrollBar.vertical: Controls.ScrollBar {
+        parent: content
+        x: listViewport.width + 6
+        y: listViewport.y
+        height: listViewport.height
+        width: 6
+        policy: Controls.ScrollBar.AsNeeded
+        contentItem: Rectangle {
+          implicitWidth: 6
+          radius: 3
+          color: root.textColor
+          opacity: listViewport.activeFocus ? 0.7 : 0.4
+        }
+      }
 
       Column {
-        id: diskRow
-        required property var modelData
-        required property int index
+        id: listContent
+        width: listViewport.width
+        spacing: 10
 
-        width: content.width
-        spacing: 4
-
-        Row {
+        Text {
           width: parent.width
-          spacing: 0
-
-          Text {
-            textFormat: Text.PlainText
-            text: diskRow.modelData.mount
-            color: root.textColor
-            font.family: Style.font.family
-            font.pixelSize: 11
-            font.bold: true
-            elide: Text.ElideRight
-            width: parent.width * 0.5
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            text: diskRow.modelData.used + " / " + diskRow.modelData.size
-            color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
-            font.family: Style.font.family
-            font.pixelSize: 10
-            horizontalAlignment: Text.AlignRight
-            width: parent.width * 0.5
-          }
-        }
-
-        // Usage bar
-        Item {
-          width: parent.width
-          height: 6
-
-          Rectangle {
-            anchors.fill: parent
-            radius: 3
-            color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.08)
-          }
-
-          Rectangle {
-            width: parent.width * (diskRow.modelData.percent / 100)
-            height: parent.height
-            radius: 3
-            color: diskRow.modelData.percent > 90 ? Color.urgent : root.accentColor
-
-            Behavior on width {
-              NumberAnimation { duration: 400; easing.type: Easing.OutCubic }
-            }
-          }
+          visible: !root.hasLoaded && root.disks.length === 0
+          textFormat: Text.PlainText
+          text: "Loading disk usage..."
+          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+          font.family: Style.font.family
+          font.pixelSize: 11
         }
 
         Text {
+          width: parent.width
+          visible: root.errorMessage !== ""
           textFormat: Text.PlainText
-          text: diskRow.modelData.percent + "% used · " + diskRow.modelData.avail + " free"
-          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+          text: root.errorMessage
+          color: Color.urgent
           font.family: Style.font.family
-          font.pixelSize: 9
+          font.pixelSize: 11
+          wrapMode: Text.Wrap
+        }
+
+        Text {
+          width: parent.width
+          visible: root.hasLoaded && root.errorMessage === "" && root.disks.length === 0
+          textFormat: Text.PlainText
+          text: root.mountFilter.length > 0 ? "No matching filesystems" : "No filesystems found"
+          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+          font.family: Style.font.family
+          font.pixelSize: 11
+        }
+
+        Repeater {
+          model: root.disks
+
+          Column {
+            id: diskRow
+            required property var modelData
+            required property int index
+
+            width: content.width
+            spacing: 4
+
+            Row {
+              width: parent.width
+              spacing: 0
+
+              Text {
+                textFormat: Text.PlainText
+                text: diskRow.modelData.mount
+                color: root.textColor
+                font.family: Style.font.family
+                font.pixelSize: 11
+                font.bold: true
+                elide: Text.ElideRight
+                width: parent.width * 0.5
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: diskRow.modelData.used + " / " + diskRow.modelData.size
+                color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+                font.family: Style.font.family
+                font.pixelSize: 10
+                horizontalAlignment: Text.AlignRight
+                width: parent.width * 0.5
+              }
+            }
+
+            // Usage bar
+            Item {
+              width: parent.width
+              height: 6
+
+              Rectangle {
+                anchors.fill: parent
+                radius: 3
+                color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.08)
+              }
+
+              Rectangle {
+                width: parent.width * (diskRow.modelData.percent / 100)
+                height: parent.height
+                radius: 3
+                color: diskRow.modelData.percent > 90 ? Color.urgent : root.accentColor
+
+                Behavior on width {
+                  NumberAnimation { duration: 400; easing.type: Easing.OutCubic }
+                }
+              }
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: diskRow.modelData.percent + "% used · " + diskRow.modelData.avail + " free"
+              color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+              font.family: Style.font.family
+              font.pixelSize: 9
+            }
+          }
         }
       }
+    }
+
+    Rectangle {
+      objectName: "listCardFocus"
+      anchors.fill: listViewport
+      visible: listViewport.activeFocus
+      color: "transparent"
+      border.width: 1
+      border.color: root.accentColor
+      radius: 3
     }
   }
 }

@@ -7,6 +7,7 @@ import qs.Ui
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "WidgetLayout.js" as Layout
+import "LayoutProfiles.js" as Profiles
 
 // Desktop Widgets — floating overlay cards on the desktop.
 //
@@ -28,9 +29,154 @@ PanelWindow {
 
   property var config: Config.defaultConfig()
 
+  readonly property var displayInventory: {
+    var result = []
+    for (var i = 0; i < Quickshell.screens.length; i++) {
+      var s = Quickshell.screens[i]
+      if (s.width > 0 && s.height > 0) result.push({ name: s.name, width: s.width,
+        height: s.height, scale: s.devicePixelRatio, x: s.x, y: s.y })
+    }
+    return result
+  }
+  readonly property string setupKey: Profiles.topologyKey(root.displayInventory)
+  readonly property string selectedDisplay: {
+    var preferred = (root.config.monitorDisplays || {})[root.setupKey]
+    for (var i = 0; i < root.displayInventory.length; i++)
+      if (root.displayInventory[i].name === preferred) return preferred
+    return root.displayInventory.length ? root.displayInventory[0].name : ""
+  }
+  screen: {
+    for (var i = 0; i < Quickshell.screens.length; i++)
+      if (Quickshell.screens[i].name === root.selectedDisplay) return Quickshell.screens[i]
+    return null
+  }
+  readonly property string currentLayoutKey: root.selectedDisplay
+    ? Profiles.profileKey(root.displayInventory, root.selectedDisplay) : ""
+  property string activeLayoutKey: ""
+  property var outgoingLayoutSnapshot: null
+  readonly property bool layoutSwitchPending: root.configLoaded && root.currentLayoutKey !== ""
+    && root.activeLayoutKey !== root.currentLayoutKey
+  property bool fitMonitorLayoutPending: false
+  property string layoutStatus: ""
+  property var undoStack: []
+  property string lastHistoryGroup: ""
+  property real lastHistoryAt: 0
+  property real guideX: -1
+  property real guideY: -1
+
+  function beginMonitorSwitch() {
+    if (!root.configLoaded || !root.currentLayoutKey) return
+    if (root.activeLayoutKey !== root.currentLayoutKey) {
+      if (root.outgoingLayoutSnapshot === null) root.outgoingLayoutSnapshot = Profiles.snapshot(root.config)
+      root.layoutStatus = "Switching display layout…"
+    } else {
+      root.outgoingLayoutSnapshot = null
+      root.widgetConfigRefresh()
+      root.layoutStatus = "Layout ready for " + root.selectedDisplay + "."
+    }
+    monitorSwitchTimer.restart()
+  }
+  onCurrentLayoutKeyChanged: root.beginMonitorSwitch()
+  onConfigLoadedChanged: if (configLoaded) root.beginMonitorSwitch()
+  Timer {
+    id: monitorSwitchTimer
+    interval: 600
+    onTriggered: {
+      if (!root.configLoaded || !root.currentLayoutKey) return
+      if (root.activeLayoutKey === root.currentLayoutKey) {
+        root.outgoingLayoutSnapshot = null
+        root.widgetConfigRefresh()
+        relayoutTimer.restart()
+        return
+      }
+      if (root.dragInProgress || root.pendingConfig || root.inFlightText || root.persistenceBlocked || root.externalConflict) {
+        restart(); return
+      }
+      var oldKey = root.activeLayoutKey || root.config.activeMonitorLayout || ""
+      var base = root.outgoingLayoutSnapshot !== null
+        ? Profiles.apply(root.config, root.outgoingLayoutSnapshot) : root.config
+      var next = Profiles.switchProfile(base, oldKey, root.currentLayoutKey)
+      root.activeLayoutKey = root.currentLayoutKey
+      root.outgoingLayoutSnapshot = null
+      root.fitMonitorLayoutPending = true
+      next.activeMonitorLayout = root.activeLayoutKey
+      root.config = next
+      root.undoStack = []
+      root.lastHistoryGroup = ""
+      root.layoutStatus = "Layout saved for " + root.selectedDisplay + " in this monitor setup."
+      root.updateLayoutIds()
+      root.widgetConfigRefresh()
+      root.saveConfig()
+      relayoutTimer.restart()
+    }
+  }
+
+  function selectDisplay(name) {
+    if (!root.displayInventory.some(function(s) { return s.name === name })) return
+    var next = root.shallowClone(root.config)
+    next.monitorDisplays = root.shallowClone(next.monitorDisplays || {})
+    next.monitorDisplays[root.setupKey] = name
+    root.config = next
+    root.saveConfig()
+  }
+  function recordLayoutChange(group) {
+    var now = Date.now()
+    if (group && root.lastHistoryGroup === group && now - root.lastHistoryAt < 500) {
+      root.lastHistoryAt = now; return
+    }
+    var stack = root.undoStack.slice(-19)
+    var snap = Profiles.snapshot(root.config)
+    if (!stack.length || JSON.stringify(stack[stack.length - 1]) !== JSON.stringify(snap)) stack.push(snap)
+    root.undoStack = stack
+    root.lastHistoryGroup = group || ""
+    root.lastHistoryAt = now
+  }
+  function undoLayout() {
+    if (!root.undoStack.length || root.dragInProgress || root.layoutSwitchPending) return
+    var stack = root.undoStack.slice(), saved = stack.pop()
+    root.undoStack = stack
+    root.lastHistoryGroup = ""
+    root.config = Profiles.apply(root.config, saved)
+    root.updateLayoutIds()
+    root.widgetConfigRefresh()
+    root.saveConfig()
+    relayoutTimer.restart()
+    root.layoutStatus = "Layout change undone."
+  }
+  function namedLayout(name, action) {
+    if (root.layoutSwitchPending) return
+    var clean = Profiles.safeName(name)
+    if (!clean || ["__proto__", "constructor", "prototype"].indexOf(clean) !== -1
+        || ["save", "load", "delete"].indexOf(action) === -1) return
+    if (action === "load") root.recordLayoutChange("")
+    root.config = Profiles.named(root.config, clean, action)
+    root.updateLayoutIds()
+    root.widgetConfigRefresh()
+    root.saveConfig()
+    relayoutTimer.restart()
+    root.layoutStatus = (action === "load" ? "Loaded " : action === "delete" ? "Deleted " : "Saved ") + clean + "."
+  }
+  function updateEditor(key, value) {
+    if (["snapToGrid", "snapToCards", "gridSize"].indexOf(key) === -1) return
+    var next = root.shallowClone(root.config)
+    next.editor = root.shallowClone(next.editor || {})
+    next.editor[key] = key === "gridSize" ? Math.max(4, Math.min(64, Number(value) || 8)) : !!value
+    root.config = next
+    root.saveConfig()
+  }
+
+  SamplingPolicy {
+    id: samplingPolicy
+    screenName: root.selectedDisplay
+    enabled: root.visible && root.allEnabledIds.length > 0
+    monitoringEnabled: root.visible && root.allEnabledIds.length > 0
+  }
+
   GpuMonitor {
     id: gpuMonitor
     config: root.config
+    samplingEnabled: samplingPolicy.samplingEnabled
+    samplingMultiplier: samplingPolicy.samplingMultiplier
   }
 
   // Emitted whenever config changes in-place. Widgets connect to this
@@ -40,7 +186,7 @@ PanelWindow {
   // configChanged signal generated by the `config` property.
   signal widgetConfigRefresh()
 
-  readonly property string configPath: Config.CONFIG_PATH
+  property string configPath: Config.CONFIG_PATH
 
   // Suppress file watcher during saves to prevent the feedback loop:
   // save → file changes → reload → parse → set config → triggers bindings
@@ -203,9 +349,23 @@ PanelWindow {
   exclusionMode: ExclusionMode.Ignore
   WlrLayershell.namespace: "io.github.tammyx44.omaglimpse"
   WlrLayershell.layer: WlrLayer.Bottom
-  WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+  // Clicked list and media controls may take keyboard focus, without grabbing
+  // it exclusively. Empty areas and click-through cards retain their input mask.
+  WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
   anchors { top: true; bottom: true; left: true; right: true }
+
+  Rectangle {
+    x: root.guideX; y: root.barOffset
+    width: 1; height: Math.max(0, root.height - root.barOffset - root.dockOffset)
+    color: root.resolvedAccent; z: 101
+    visible: root.editMode && root.dragInProgress && root.guideX >= 0
+  }
+  Rectangle {
+    x: 0; y: root.guideY; width: root.width; height: 1
+    color: root.resolvedAccent; z: 101
+    visible: root.editMode && root.dragInProgress && root.guideY >= 0
+  }
 
   // Input mask: union of Regions, one per possible widget card.
   // Each Region uses `item:` to read a card's geometry directly.
@@ -325,6 +485,11 @@ PanelWindow {
       root.persistenceBlocked = true
       return
     }
+    root.undoStack = []
+    root.lastHistoryGroup = ""
+    root.lastHistoryAt = 0
+    root.outgoingLayoutSnapshot = null
+    root.activeLayoutKey = ""
     root.config = parsed.config
     root.configLoaded = true
     root.lastSavedText = text
@@ -332,6 +497,7 @@ PanelWindow {
     root.configError = ""
     root.updateLayoutIds()
     root.widgetConfigRefresh()
+    root.beginMonitorSwitch()
   }
 
   function resolveConfigConflict(keepLocal) {
@@ -359,6 +525,10 @@ PanelWindow {
   // excessive disk I/O when dragging sliders in the settings panel.
   property var pendingConfig: null
   function saveConfig() {
+    if (root.activeLayoutKey && root.currentLayoutKey === root.activeLayoutKey) {
+      root.config = Profiles.remember(root.config, root.activeLayoutKey)
+      root.config.activeMonitorLayout = root.activeLayoutKey
+    }
     root.pendingConfig = root.config
     if (root.persistenceBlocked || root.externalConflict) return
     root.saveStatus = "Saving…"
@@ -402,6 +572,9 @@ PanelWindow {
 
   function updateWidgetConfig(widgetId, key, value) {
     if (!root.config.widgets || !root.config.widgets[widgetId]) return
+    if (root.layoutSwitchPending && ["enabled", "x", "y", "cardWidth", "cardHeight", "gaugeDiameter"].indexOf(key) !== -1) return
+    if (["enabled", "x", "y", "cardWidth", "cardHeight", "gaugeDiameter"].indexOf(key) !== -1
+        && root.config.widgets[widgetId][key] !== value) root.recordLayoutChange(widgetId + ":" + (key === "x" || key === "y" ? "position" : key))
     var c = shallowClone(root.config)
     c.widgets = shallowClone(c.widgets)
     c.widgets[widgetId] = shallowClone(c.widgets[widgetId])
@@ -413,7 +586,9 @@ PanelWindow {
   }
 
   function updateWidgetPosition(widgetId, x, y) {
+    if (root.layoutSwitchPending) return
     if (!root.config.widgets || !root.config.widgets[widgetId]) return
+    root.recordLayoutChange("")
     var c = shallowClone(root.config)
     c.widgets = shallowClone(c.widgets)
     c.widgets[widgetId] = shallowClone(c.widgets[widgetId])
@@ -429,6 +604,8 @@ PanelWindow {
   // blurEnabled, blurIntensity) by writing into config.global, and
   // top-level keys (layout, themeMode) by writing directly on config.
   function updateGlobalConfig(key, value) {
+    if (root.layoutSwitchPending && key === "cardSpacing") return
+    if (key === "cardSpacing") root.recordLayoutChange("cardSpacing")
     var c = shallowClone(root.config)
     if (key === "cardRadius" || key === "gaugeDiameter" || key === "cardSpacing"
         || key === "blurEnabled" || key === "blurIntensity"
@@ -460,10 +637,15 @@ PanelWindow {
     root.persistenceBlocked = false
     root.externalConflict = false
     root.configError = ""
+    root.undoStack = []
+    root.lastHistoryGroup = ""
+    root.activeLayoutKey = ""
+    root.outgoingLayoutSnapshot = null
     root.config = Config.defaultConfig()
     root.updateLayoutIds()
     root.widgetConfigRefresh()
     root.saveConfig()
+    root.beginMonitorSwitch()
   }
 
   function showContextMenu(widgetId, x, y) {
@@ -493,7 +675,9 @@ PanelWindow {
   }
 
   function resetAllPositions() {
+    if (root.layoutSwitchPending) return
     if (!root.config.widgets) return
+    root.recordLayoutChange("")
     var c = shallowClone(root.config)
     c.widgets = shallowClone(c.widgets)
     var ids = Config.allWidgetIds()
@@ -604,7 +788,7 @@ PanelWindow {
     var others = getAllCardRects(widgetId)
     if (others.length === 0) return { x: desiredX, y: desiredY }
 
-    var gap = 4 // minimum gap between cards
+    var gap = root.cardSpacing
 
     // Check if the desired position is already collision-free
     // (inline rectsOverlap to avoid function call overhead)
@@ -627,8 +811,8 @@ PanelWindow {
     var bestDist = Infinity
     var step = 8
     var maxSteps = 80 // search up to 640px away
-    var maxW = root.width - cardW
-    var maxH = root.height - cardH
+    var maxW = Math.max(0, root.width - cardW)
+    var maxH = Math.max(root.barOffset, root.height - root.dockOffset - cardH)
 
     for (var dir = 0; dir < 4; dir++) {
       for (var s = 1; s <= maxSteps; s++) {
@@ -675,9 +859,11 @@ PanelWindow {
   // Apply a position preset to all enabled widgets.
   // Uses actual card heights for accurate stacking.
   function applyPreset(preset) {
+    if (root.layoutSwitchPending) return
     if (!root.config.widgets) return
     var ids = root.allEnabledIds
     if (ids.length === 0) return
+    root.recordLayoutChange("")
     var c = shallowClone(root.config)
     c.widgets = shallowClone(c.widgets)
 
@@ -909,6 +1095,7 @@ PanelWindow {
     function preset(presetName: string): void {
       root.applyPreset(presetName)
     }
+    function undo(): void { root.undoLayout() }
     function rescan(): void {
       configFile.reload()
     }
@@ -928,8 +1115,23 @@ PanelWindow {
     item.accentColor = root.resolvedAccent
     item.cardRadius = root.cardRadius
     item.gaugeDiameter = root.gaugeDiameter
+    if ("samplingEnabled" in item) item.samplingEnabled = Qt.binding(function() { return samplingPolicy.samplingEnabled })
+    if ("samplingMultiplier" in item) item.samplingMultiplier = Qt.binding(function() { return samplingPolicy.samplingMultiplier })
     if (widgetId === "systemMonitor" || widgetId === "temperature") item.gpuMonitor = gpuMonitor
     if (widgetId === "systemMonitor") item.editMode = root.editMode
+    root.updateCardMetric(item, widgetId)
+  }
+
+  // Live natural dimensions let height controls honour the content floor.
+  property var cardMetrics: ({})
+  function updateCardMetric(item, widgetId) {
+    if (!item) return
+    var metric = { width: item.width, height: item.height, minimumHeight: item.minimumCardHeight }
+    var old = root.cardMetrics[widgetId]
+    if (old && old.width === metric.width && old.height === metric.height && old.minimumHeight === metric.minimumHeight) return
+    var next = shallowClone(root.cardMetrics)
+    next[widgetId] = metric
+    root.cardMetrics = next
   }
 
   // Cache of last known card sizes by widget ID.
@@ -1076,6 +1278,9 @@ PanelWindow {
         target: cardLoader.item
         ignoreUnknownSignals: true
         function onGpuSelected(deviceId) { root.updateWidgetConfig("systemMonitor", "gpuDevice", deviceId) }
+        function onMinimumCardHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
+        function onWidthChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
+        function onHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
       }
 
       // Re-apply props when config changes
@@ -1119,7 +1324,7 @@ PanelWindow {
         // cursorShape must be conditional — Qt's default SizeAllCursor
         // can leak even when the handler is disabled on some versions.
         cursorShape: root.editMode ? Qt.SizeAllCursor : Qt.ArrowCursor
-        enabled: root.editMode && !card.clickThrough
+        enabled: root.editMode && !card.clickThrough && !root.layoutSwitchPending
 
         onActiveChanged: {
           if (active) {
@@ -1143,7 +1348,7 @@ PanelWindow {
           if (!active && card.isManual) {
             // Save position when drag ends, clamped to screen
             var finalX = Math.max(0, Math.min(card.x, root.width - card.width))
-            var finalY = Math.max(root.barOffset, Math.min(card.y, root.height - card.height))
+            var finalY = Math.max(root.barOffset, Math.min(card.y, root.height - root.dockOffset - card.height))
             // Final collision resolution
             var finalResolved = root.resolveDragCollision(card.widgetId, finalX, finalY, card.width, card.height)
             card.x = finalResolved.x
@@ -1153,6 +1358,8 @@ PanelWindow {
             // Restore z-order and unfreeze relayout
             card.z = 0
             root.dragInProgress = false
+            root.guideX = -1
+            root.guideY = -1
             relayoutTimer.restart()
           }
         }
@@ -1163,9 +1370,16 @@ PanelWindow {
             var newY = card.dragStartY + translation.y
             // Clamp to screen
             newX = Math.max(0, Math.min(newX, root.width - card.width))
-            newY = Math.max(root.barOffset, Math.min(newY, root.height - card.height))
+            newY = Math.max(root.barOffset, Math.min(newY, root.height - root.dockOffset - card.height))
+            var options = root.shallowClone(root.config.editor || {})
+            options.gap = root.cardSpacing
+            var snapped = Layout.snapPosition({ x: newX, y: newY, width: card.width, height: card.height },
+              root.getAllCardRects(card.widgetId), { left: 0, top: root.barOffset, right: root.width,
+                bottom: root.height - root.dockOffset }, options)
             // Resolve collisions with other cards
-            var resolved = root.resolveDragCollision(card.widgetId, newX, newY, card.width, card.height)
+            var resolved = root.resolveDragCollision(card.widgetId, snapped.x, snapped.y, card.width, card.height)
+            root.guideX = resolved.x === snapped.x ? snapped.guideX : -1
+            root.guideY = resolved.y === snapped.y ? snapped.guideY : -1
             card.x = resolved.x
             card.y = resolved.y
           }
@@ -1294,6 +1508,37 @@ PanelWindow {
       }
       rects.push(rect)
     }
+    if (root.fitMonitorLayoutPending) root.fitMonitorLayout()
+  }
+
+  // Fit only the active display profile after its real card sizes settle.
+  // The outgoing profile was saved before switching, so a smaller display
+  // cannot overwrite the arrangement on the larger one.
+  function fitMonitorLayout() {
+    if (root.activeLayoutKey !== root.currentLayoutKey || root.pendingConfig || root.inFlightText
+        || root.persistenceBlocked || root.externalConflict) { relayoutTimer.restart(); return }
+    for (var i = 0; i < root.allEnabledIds.length; i++) {
+      var card = root.cardItemFor(root.allEnabledIds[i])
+      if (!card || !card.contentReady || !card.hasSettled) { relayoutTimer.restart(); return }
+    }
+    root.fitMonitorLayoutPending = false
+    var next = root.shallowClone(root.config)
+    next.widgets = root.shallowClone(next.widgets)
+    var changed = false
+    root.manualLayoutIds.forEach(function(id) {
+      var card = root.cardItemFor(id), saved = next.widgets[id]
+      var x = Math.round(card.x), y = Math.round(card.y)
+      if (saved.x !== x || saved.y !== y) {
+        next.widgets[id] = root.shallowClone(saved)
+        next.widgets[id].x = x; next.widgets[id].y = y
+        changed = true
+      }
+    })
+    if (changed) {
+      root.config = next
+      root.widgetConfigRefresh()
+      root.saveConfig()
+    }
   }
 
   // --- Manual-positioned cards (dragged out of Flow) ---
@@ -1370,6 +1615,17 @@ PanelWindow {
   // load it and control visibility via the `visible` property.
   SettingsPanel {
     id: settingsPanel
+    screen: root.screen
+    displayInventory: root.displayInventory
+    selectedDisplay: root.selectedDisplay
+    undoAvailable: root.undoStack.length > 0 && !root.layoutSwitchPending
+    layoutStatus: root.layoutStatus
+    layoutBusy: root.layoutSwitchPending
+    cardMetrics: root.cardMetrics
+    onDisplaySelected: function(name) { root.selectDisplay(name) }
+    onEditorChanged: function(key, value) { root.updateEditor(key, value) }
+    onUndoRequested: root.undoLayout()
+    onNamedLayoutRequested: function(name, action) { root.namedLayout(name, action) }
     gpuDevices: gpuMonitor.inventory
     configError: root.configError
     layoutWarning: root.layoutWarning
