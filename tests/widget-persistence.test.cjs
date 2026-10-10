@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, '../Widgets.qml'), 'utf8')
 function setup() {
   const root = { config: Config.defaultConfig(), configLoaded: false, pendingConfig: null,
     inFlightText: '', lastSavedText: '', externalText: '', externalConflict: false,
-    persistenceBlocked: false, configError: '', updateLayoutIds() {}, widgetConfigRefresh() {} }
+    persistenceBlocked: false, configError: '', updateLayoutIds() {}, widgetConfigRefresh() {}, beginMonitorSwitch() {} }
   const timer = { restart() {}, stop() {} }
   const context = { root, Config, saveDebounceTimer: timer, configFile: { reload() {} } }
   vm.createContext(context)

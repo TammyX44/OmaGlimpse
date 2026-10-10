@@ -6,6 +6,7 @@ import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
+import "SamplingModel.js" as Sampling
 
 // System monitor card: CPU, RAM, and GPU circular gauges.
 // Colors, refresh interval, and sub-widget visibility are config-driven.
@@ -23,6 +24,9 @@ BorderSurface {
   property real gaugeDiameter: 120
   property var gpuMonitor: null
   property bool editMode: false
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
   signal gpuSelected(string deviceId)
 
   // --- Config-driven settings ---
@@ -62,11 +66,13 @@ BorderSurface {
   property real ramFreeGb: 0
 
   function refresh() {
+    if (!root.samplingActive) return
     if (root.showRam) memInfoFile.reload()
     if (root.showCpu) cpuStatFile.reload()
   }
 
   function updateMemInfo(raw) {
+    if (!root.samplingActive) return
     var info = Model.parseMemInfo(raw)
     root.memReady = info.valid
     if (info.valid) root.memValue = info.percent
@@ -75,6 +81,7 @@ BorderSurface {
   }
 
   function updateCpuStat(raw) {
+    if (!root.samplingActive) return
     var next = Model.parseCpuStat(raw)
     if (next) {
       var percent = Model.cpuSnapshotPercent(prevCpuStat, next)
@@ -94,7 +101,7 @@ BorderSurface {
   // Read /proc/meminfo via FileView — no process spawn
   FileView {
     id: memInfoFile
-    path: "/proc/meminfo"
+    path: root.samplingActive && root.showRam ? "/proc/meminfo" : ""
     watchChanges: false
     printErrors: false
     onLoaded: root.updateMemInfo(text())
@@ -103,15 +110,16 @@ BorderSurface {
   // Read /proc/stat via FileView — no process spawn
   FileView {
     id: cpuStatFile
-    path: "/proc/stat"
+    path: root.samplingActive && root.showCpu ? "/proc/stat" : ""
     watchChanges: false
     printErrors: false
     onLoaded: root.updateCpuStat(text())
   }
 
   Timer {
-    interval: root.refreshInterval
-    running: root.showCpu || root.showRam
+    objectName: "systemSamplingTimer"
+    interval: Sampling.interval(root.refreshInterval, root.samplingMultiplier)
+    running: root.samplingActive && (root.showCpu || root.showRam)
     repeat: true
     onTriggered: root.refresh()
   }
@@ -122,6 +130,12 @@ BorderSurface {
     if (root.showCpu) Qt.callLater(root.refresh)
   }
   onShowRamChanged: if (root.showRam) Qt.callLater(root.refresh)
+  onSamplingActiveChanged: {
+    root.prevCpuStat = null
+    root.cpuReady = false
+    root.cpuUser = root.cpuSystem = 0
+    if (root.samplingActive) Qt.callLater(root.refresh)
+  }
 
   Component.onCompleted: root.refresh()
   Text {

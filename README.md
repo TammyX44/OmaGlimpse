@@ -15,8 +15,8 @@ OmaGlimpse is a set of floating desktop cards for [Omarchy](https://omarchy.org)
 - **System Monitor:** CPU and memory gauges, plus one GPU gauge that switches between detected GPUs with scrolling, horizontal dragging, or hover arrows. Device names and optional custom names identify the selected GPU.
 - **Battery & Power:** charge and battery energy flow when UPower reports them; power profile controls when supported by the system.
 - **Media Player:** track details and playback controls for an available MPRIS player.
-- **Top Processes:** processes ranked by CPU or memory use.
-- **Network Speed:** live download and upload rates for an automatically detected or selected interface.
+- **Top Processes:** processes ranked by recent CPU or memory use, using interval readings rather than lifetime averages.
+- **Network Speed:** live download and upload rates, adaptive or fixed gauge scaling, and a short traffic history for an automatically detected or selected interface.
 - **Disk Usage:** usage of mounted filesystems.
 - **Temperature:** available CPU and GPU sensor readings, with Celsius or Fahrenheit display.
 
@@ -37,15 +37,18 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 | `SettingsPanel.qml`, `WidgetDropdown.qml`, `WidgetContextMenu.qml`, `SettingsButton.qml` | Provide the settings panel, per-card controls, context menu, and bar button. |
 | `WidgetConfig.js`, `WidgetModel.js`, `WidgetTheme.js`, `CircularGauge.qml`, `CompactToggle.qml` | Validate preferences, parse readings, follow theme colors, and share UI controls. |
 | `ArtworkPlaceholder.qml`, `fetch_album_art.py` | Draw a theme-matched media placeholder and safely fetch bounded remote cover images. |
+| `SamplingPolicy.qml`, `SamplingModel.js` | Coordinate lock, display power and power-saver sampling across the cards. |
+| `LayoutProfiles.js`, `WidgetLayout.js`, `LayoutEditorControls.qml` | Remember monitor and named layouts, snap cards, and provide the layout editor. |
+| `ProcessModel.js`, `process_snapshot.py`, `NetworkHistory.js` | Calculate interval process CPU readings and bounded network history and scaling. |
 | `tests/`, `.github/workflows/` | Check widget behavior and manifest validity locally and in CI. |
 | `assets/`, `preview.png` | Hold the approved screenshots, demo video, and marketplace preview. |
 
 ## Requirements
 
 - Omarchy with the Quickshell-based `omarchy-shell` and its plugin commands.
-- Standard Linux `/proc` and `/sys` interfaces and system utilities (`ps`, `df`, and a POSIX shell) for system, process, disk, network, and sensor readings.
+- Standard Linux `/proc` and `/sys` interfaces, Python 3 for process snapshots, and system utilities (`df`, `timeout`, and a POSIX shell) for disk and sensor readings.
 - Optional: UPower for battery status and energy flow; an MPRIS-capable player for media controls; `nvidia-smi` for NVIDIA readings; `intel_gpu_top` from `intel-gpu-tools` for Intel usage when performance counters are readable by the current user. AMD utilization, VRAM, and GPU temperatures use readable `/sys` interfaces where the driver exposes them. `lspci` improves detected GPU names.
-- Optional: Python 3 and curl 8.4+ for size- and time-limited HTTPS album-cover downloads. Local covers and the theme-matched fallback work without them.
+- Optional: curl 8.4+ for size- and time-limited HTTPS album-cover downloads. Local covers and the theme-matched fallback work without it.
 - Optional: `powerprofilesctl` and a supported power-profile driver for profile detection and switching. The profile buttons call Omarchy's `omarchy-powerprofiles-set` command, which also remembers the selection in the user's Omarchy state directory.
 
 Unavailable hardware readings are hidden or shown as unavailable. Detected GPUs remain selectable when readings are missing or the device is sleeping. The plugin does not install extra packages, change performance-counter permissions, or request elevated privileges.
@@ -74,6 +77,22 @@ The media card reserves its playback height while idle, so starting a player or 
 
 Installing the plugin does not overwrite existing preferences. Changes made in the settings panel save to the plugin's own JSON file, and resetting to defaults requires confirmation.
 
+### Layout editor and monitor setups
+
+Enable edit mode to see alignment guides while dragging. Grid snapping and card-edge snapping are separately configurable under **Layout Editor**. Edge and centre guides use **Card Spacing** for consistent gaps. **Undo last layout change** restores positions, sizes, enabled cards and spacing; theme and data-source preferences stay as they are.
+
+Save a named arrangement such as Work or Gaming and load it later. Replacing or deleting a named layout requires a second click. **Widget display** selects the monitor that holds the desktop cards. Each connected monitor arrangement, resolution and scale remembers its own layout; reconnecting a known setup restores it. A smaller setup fits manual positions to its usable area without changing the arrangement saved for the larger setup. Cards that cannot fit still produce the existing layout warning. The cards occupy one selected display at a time.
+
+### Sampling and live readings
+
+All card collectors pause while the session is locked, the selected display is powered off, or the overlay is hidden. Sampling intervals become three times longer in power-saver mode, with an immediate refresh on resume. UPower and MPRIS continue providing their normal event-driven updates. Lock and display state use bounded IPC checks every two seconds; a failed check retains the last known state. This is a polling reduction, not a claim of zero CPU use.
+
+Top Processes measures changes in process CPU ticks between snapshots. 100% means one fully occupied logical CPU, so a multithreaded process can exceed 100%. A first sample or a reused PID shows a dash until there is a valid baseline; memory usage is available immediately.
+
+Power-profile service notifications update the selected pill promptly. Hardware confirmation still follows a requested change, and a slower ten-second firmware check catches hotkeys that bypass the service (thirty seconds in saver mode). A pending or failed request is shown explicitly.
+
+Network Speed supports **Automatic** scaling, which rises promptly and falls gradually, or a fixed **MB/s** reference. Toggle the timestamped history graph in that card's settings. Pauses, interface changes and counter resets rebaseline the rate instead of producing a false spike.
+
 ### Multiple GPUs
 
 Scroll over the GPU gauge to cycle through devices, drag horizontally, or use the arrows that appear on hover. Keyboard users can focus the gauge and press the arrow keys. The gauge and labels slide together, keeping the card size fixed. Fast scrolling retains one pending step so it does not repeatedly restart the transition. Scrolling and dragging are disabled in edit mode and when the card is set to click-through.
@@ -98,9 +117,18 @@ Update an installed copy with `omarchy plugin update io.github.tammyx44.omaglimp
 node --test tests/*.test.cjs
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 sh tests/run-gpu-qml-tests.sh
+sh tests/sampling-run-qml-tests.sh
+NETWORK_QML_TESTS=1 node --test tests/network-history.test.cjs
+sh tests/run-layout-qml-tests.sh
 ```
 
 The optional QML checks need an installed Omarchy shell, Quickshell, and QtTest. They use temporary settings and simulated Intel/NVIDIA/AMD telemetry to check scrolling, swiping, keyboard/arrow controls, stable sizing, shared temperatures, and collector lifecycle. Set `OMARCHY_SHELL_DIR` if the shell is installed somewhere other than `/usr/share/omarchy/shell`. They leave desktop settings untouched.
+
+The layout suite needs a running Wayland session because it loads the real desktop and settings panel types. It opens a temporary synthetic preview window and uses an isolated settings file. Other QML suites run offscreen. Python collector runtime checks skip on systems without the required QML modules.
+
+For a short before/after collector workload check, run `node tests/benchmark-collectors.cjs`. It compares the working tree with `HEAD` by default; set `BENCH_BASE_REF` to an earlier revision after committing an update. It runs all seven cards offscreen with simulated normal, saver and paused states and reports CPU, main-process PSS and voluntary context switches. It changes no desktop preferences or power state. Context switches are not kernel wakeup counts, and this is not a whole-desktop or energy benchmark.
+
+The [local 3.2.0 workload results](tests/benchmark-results-2026-10-10.json) show lower CPU in the simulated paused state (8.2% → 2.2% of one core), similar memory, and fewer voluntary context switches. Normal active CPU increased (10.28% → 13.0%) with the added functionality. This short software-rendered run does not establish an overall CPU reduction or native desktop energy savings.
 
 ## License
 

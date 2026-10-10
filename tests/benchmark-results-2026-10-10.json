@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-10",
+  "previousRevision": "09bbc19",
+  "updatedVersion": "3.2.0",
+  "method": "Sequential seven-card offscreen workload; Qt Quick software renderer; three seconds warmup; ten seconds per simulated phase. CPU includes reaped child CPU. PSS covers the main process only. Voluntary context switches are not kernel wakeup counts. Desktop power/lock state and preferences were not changed.",
+  "previous": [
+    {"phase": "normal", "cpuPercentOneCore": 10.28, "pssMiB": 125.72, "voluntaryContextSwitches": 10508},
+    {"phase": "saver", "cpuPercentOneCore": 8.01, "pssMiB": 125.71, "voluntaryContextSwitches": 9787},
+    {"phase": "paused", "cpuPercentOneCore": 8.2, "pssMiB": 124.85, "voluntaryContextSwitches": 9458}
+  ],
+  "updated": [
+    {"phase": "normal", "cpuPercentOneCore": 13.0, "pssMiB": 126.79, "voluntaryContextSwitches": 4474},
+    {"phase": "saver", "cpuPercentOneCore": 7.8, "pssMiB": 126.78, "voluntaryContextSwitches": 1861},
+    {"phase": "paused", "cpuPercentOneCore": 2.2, "pssMiB": 126.48, "voluntaryContextSwitches": 636}
+  ],
+  "interpretation": "This short run supports lower paused workload and fewer voluntary context switches. Normal active CPU increased and memory remained similar; it does not establish an overall CPU reduction, native desktop performance or energy savings. Saver and paused labels are simulated: the old revision does not react to them. Lock/display checks continue in the updated paused state. Real multi-monitor hotplug remains untested; automated topology, scale, restoration and transition race checks passed."
+}

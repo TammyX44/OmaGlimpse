@@ -7,6 +7,7 @@ import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "GpuModel.js" as Gpu
+import "SamplingModel.js" as Sampling
 
 // Temperature sensors card: flat list layout.
 // Large hottest temp + status on the left, vertical divider,
@@ -23,6 +24,9 @@ BorderSurface {
   property real cardRadius: 18
   property real gaugeDiameter: 120
   property var gpuMonitor: null
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
   readonly property var gpuDevices: root.gpuMonitor ? root.gpuMonitor.devices : []
   readonly property string selectedGpuId: (Config.widgetConfig(root.config, "systemMonitor") || {}).gpuDevice || ""
 
@@ -63,6 +67,7 @@ BorderSurface {
 
   property string cpuTempPath: ""
   property bool cpuAvailable: false
+  property bool cpuChecked: false
   property bool gpuAvailable: false
 
   readonly property string tempStatus: Theme.resolveTempStatus(root.hottestTemp).toUpperCase()
@@ -84,11 +89,12 @@ BorderSurface {
   }
 
   function refresh() {
+    if (!root.samplingActive) return
     if (root.sensorList.indexOf("cpu") !== -1) {
       if (root.cpuTempPath) cpuTempFile.reload()
-      else cpuFindProc.running = true
+      else if (!root.cpuChecked && !cpuFindProc.running) cpuFindProc.running = true
     }
-    if (root.showFan && (!root.fanChecked || root.fanRpm >= 0)) fanProc.running = true
+    if (root.showFan && (!root.fanChecked || root.fanRpm >= 0) && !fanProc.running) fanProc.running = true
   }
 
   function recomputeAggregates() {
@@ -126,6 +132,7 @@ BorderSurface {
   onCpuAvailableChanged: root.recomputeAggregates()
 
   function updateCpuTemp(raw) {
+    if (!root.samplingActive) return
     var n = Number(String(raw || "").trim())
     if (!isFinite(n) || n <= 0) {
       root.cpuAvailable = false
@@ -161,6 +168,7 @@ BorderSurface {
   }
 
   function updateFan(raw) {
+    if (!root.samplingActive) return
     root.fanChecked = true
     var n = Number(String(raw || "").trim())
     root.fanRpm = (isFinite(n) && n >= 0) ? Math.round(n) : -1
@@ -168,8 +176,11 @@ BorderSurface {
 
   Process {
     id: cpuFindProc
+    objectName: "temperatureDiscovery"
     command: ["sh", "-c", "for z in /sys/class/thermal/thermal_zone*; do type=$(cat \"$z/type\" 2>/dev/null); if printf '%s\\n' \"$type\" | grep -Eqi '^(x86_pkg_temp|cpu[-_ ]?thermal|tcpu([_-].*)?|tctl|soc[_-]thermal|coretemp)$'; then if [ -r \"$z/temp\" ]; then echo \"$z/temp\"; exit 0; fi; fi; done; for n in /sys/class/hwmon/hwmon*/name; do name=$(cat \"$n\" 2>/dev/null); case \"$name\" in coretemp|k10temp|zenpower|cpu_thermal) if [ -r \"${n%/name}/temp1_input\" ]; then echo \"${n%/name}/temp1_input\"; exit 0; fi;; esac; done; for z in /sys/class/thermal/thermal_zone*; do type=$(cat \"$z/type\" 2>/dev/null); if printf '%s\\n' \"$type\" | grep -Eqi 'acpi|cpu|core'; then if [ -r \"$z/temp\" ]; then echo \"$z/temp\"; exit 0; fi; fi; done; echo ''"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: {
+      if (!root.samplingActive) return
+      root.cpuChecked = true
       root.cpuTempPath = String(text).trim()
       if (root.cpuTempPath) cpuTempFile.reload()
       else {
@@ -181,10 +192,11 @@ BorderSurface {
 
   FileView {
     id: cpuTempFile
-    path: root.cpuTempPath
+    path: root.samplingActive ? root.cpuTempPath : ""
     watchChanges: false; printErrors: false
     onLoaded: root.updateCpuTemp(text())
     onLoadFailed: {
+      if (!root.samplingActive) return
       root.cpuAvailable = false
       root.cpuTempPath = ""
       root.recomputeAggregates()
@@ -193,21 +205,25 @@ BorderSurface {
 
   Process {
     id: fanProc
+    objectName: "fanSamplingProcess"
     command: ["sh", "-c", "max=-1; for f in /sys/class/hwmon/*/fan*_input; do if [ -r \"$f\" ]; then val=$(cat \"$f\" 2>/dev/null); case \"$val\" in ''|*[!0-9]*) continue;; esac; if [ \"$val\" -gt \"$max\" ]; then max=$val; fi; fi; done; echo \"$max\""]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateFan(text) }
   }
 
   Timer {
-    interval: root.refreshInterval; running: true; repeat: true
+    objectName: "temperatureSamplingTimer"
+    interval: Sampling.interval(root.refreshInterval, root.samplingMultiplier)
+    running: root.samplingActive; repeat: true
     onTriggered: root.refresh()
   }
 
   // Sleeping GPUs and sensors loaded after shell startup should recover, but
   // missing hardware should not cause a failed process every normal refresh.
   Timer {
-    interval: 30000
-    running: (root.sensorList.indexOf("cpu") !== -1 && !root.cpuAvailable)
-      || (root.showFan && root.fanChecked && root.fanRpm < 0)
+    objectName: "temperatureRetryTimer"
+    interval: Sampling.interval(30000, root.samplingMultiplier)
+    running: root.samplingActive && ((root.sensorList.indexOf("cpu") !== -1 && !root.cpuAvailable)
+      || (root.showFan && root.fanChecked && root.fanRpm < 0))
     repeat: true
     onTriggered: {
       if (root.sensorList.indexOf("cpu") !== -1 && !root.cpuAvailable && !cpuFindProc.running) cpuFindProc.running = true
@@ -216,6 +232,16 @@ BorderSurface {
   }
 
   Component.onCompleted: root.refresh()
+  onSamplingActiveChanged: {
+    if (root.samplingActive) {
+      root.cpuChecked = false
+      root.fanChecked = false
+      root.refresh()
+    } else {
+      cpuFindProc.running = false
+      fanProc.running = false
+    }
+  }
 
   // Layout: large temp + status on left | divider | sensor rows on right
   Row {

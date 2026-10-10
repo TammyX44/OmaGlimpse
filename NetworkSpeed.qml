@@ -5,6 +5,7 @@ import qs.Commons
 import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
+import "NetworkHistory.js" as History
 
 // Network speed card: download and upload speed gauges.
 // Reads /proc/net/dev and computes delta between polls.
@@ -19,9 +20,17 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property int refreshInterval: Config.widgetRefreshInterval(root.config, root.widgetId)
+  readonly property int samplingInterval: Math.min(2147483647, Math.max(1,
+    refreshInterval * (isFinite(samplingMultiplier) ? Math.max(1, samplingMultiplier) : 1)))
+  readonly property bool showHistory: widgetCfg.showHistory !== false
+  readonly property bool fixedScale: widgetCfg.scaleMode === "fixed"
+  readonly property real scaleBytes: fixedScale ? History.fixedScale(widgetCfg.scaleLimitMbps) : autoScale
+  readonly property string scaleLabel: Model.formatSpeed(scaleBytes) + (fixedScale ? " ref" : " auto")
   readonly property string interfaceFilter: String(root.widgetCfg.interface || "auto")
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
@@ -37,7 +46,7 @@ BorderSurface {
   padding: 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, gaugeRow.implicitWidth + 40)
-  height: gaugeRow.implicitHeight + 60
+  height: content.implicitHeight + 40
 
 
   property var prevDevs: null
@@ -48,14 +57,20 @@ BorderSurface {
   property string activeInterface: ""
   property bool sampleReady: false
   property string sampleState: "Measuring…"
+  property real autoScale: History.minimumScale
+  property var history: []
+  property real historyTime: 0
 
   function refresh() {
+    if (!root.samplingEnabled) return
     routeFile.reload()
     netFile.reload()
   }
 
-  function updateNet(raw) {
-    var now = Date.now()
+  function updateNet(raw, timestamp) {
+    if (!root.samplingEnabled) return
+    var now = timestamp === undefined ? Date.now() : timestamp
+    root.historyTime = now
     var devs = Model.parseNetDev(raw)
     var iface = root.interfaceFilter === "auto"
       ? (root.defaultInterface && devs[root.defaultInterface]
@@ -64,17 +79,13 @@ BorderSurface {
       : root.interfaceFilter
 
     if (!iface || !devs[iface]) {
-      root.activeInterface = ""
-      root.rxSpeed = 0
-      root.txSpeed = 0
-      root.sampleReady = false
+      root.resetBaseline()
       root.sampleState = "Unavailable"
-      root.prevDevs = devs
-      root.prevTime = now
       return
     }
 
     if (root.activeInterface !== iface || !root.prevDevs || !root.prevDevs[iface]) {
+      root.resetBaseline()
       root.activeInterface = iface
       root.rxSpeed = 0
       root.txSpeed = 0
@@ -87,25 +98,40 @@ BorderSurface {
     root.activeInterface = iface
 
     var elapsedMs = now - root.prevTime
+    if (elapsedMs <= 0 || elapsedMs > root.samplingInterval * 2.5 ||
+        devs[iface].rxBytes < root.prevDevs[iface].rxBytes ||
+        devs[iface].txBytes < root.prevDevs[iface].txBytes) {
+      root.rxSpeed = 0
+      root.txSpeed = 0
+      root.sampleReady = false
+      root.sampleState = "Measuring…"
+      root.history = History.append(root.history, now, 0, 0, true)
+      root.prevDevs = devs
+      root.prevTime = now
+      return
+    }
     if (root.prevTime > 0 && elapsedMs > 0) {
       var speed = Model.netSpeed(root.prevDevs[iface], devs[iface], elapsedMs)
       root.rxSpeed = speed.rx
       root.txSpeed = speed.tx
       root.sampleReady = true
-      root.sampleState = "5 MB/s ref"
+      root.autoScale = History.nextScale(root.autoScale, speed.rx, speed.tx, elapsedMs)
+      root.history = History.append(root.history, now, speed.rx, speed.tx, false)
     }
     root.prevDevs = devs
     root.prevTime = now
   }
 
   function resetBaseline() {
+    root.history = []
+    root.autoScale = History.minimumScale
     root.prevDevs = null
     root.prevTime = 0
     root.activeInterface = ""
     root.rxSpeed = 0
     root.txSpeed = 0
     root.sampleReady = false
-    root.sampleState = "Measuring…"
+    root.sampleState = root.samplingEnabled ? "Measuring…" : "Paused"
   }
 
   // Read /proc/net/dev via FileView — no process spawn, near-zero overhead.
@@ -118,12 +144,9 @@ BorderSurface {
     printErrors: false
     onLoaded: root.updateNet(text())
     onLoadFailed: {
-      root.activeInterface = ""
-      root.rxSpeed = 0
-      root.txSpeed = 0
-      root.sampleReady = false
+      if (!root.samplingEnabled) return
+      root.resetBaseline()
       root.sampleState = "Unavailable"
-      root.prevDevs = null
     }
   }
 
@@ -138,8 +161,9 @@ BorderSurface {
   }
 
   Timer {
-    interval: root.refreshInterval
-    running: true
+    objectName: "networkSampleTimer"
+    interval: root.samplingInterval
+    running: root.samplingEnabled
     repeat: true
     onTriggered: root.refresh()
   }
@@ -148,15 +172,27 @@ BorderSurface {
     root.resetBaseline()
     root.refresh()
   })
+  onSamplingEnabledChanged: {
+    root.resetBaseline()
+    if (root.samplingEnabled) root.refresh()
+  }
+  onSamplingIntervalChanged: {
+    root.resetBaseline()
+    if (root.samplingEnabled) root.refresh()
+  }
   Component.onCompleted: root.refresh()
 
   Column {
     id: content
     anchors.centerIn: parent
     spacing: 8
+    width: root.width - 40
 
     // Interface name as a header
     Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
       textFormat: Text.PlainText
       text: root.activeInterface || (root.interfaceFilter !== "auto" ? root.interfaceFilter : "—")
       color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
@@ -173,23 +209,72 @@ BorderSurface {
       anchors.horizontalCenter: parent.horizontalCenter
 
       CircularGauge {
-        value: Math.min(100, root.rxSpeed / (1024 * 1024) * 20) // scale: 5MB/s = 100%
+        objectName: "networkDownloadGauge"
+        value: Math.min(100, root.rxSpeed / root.scaleBytes * 100)
+        animateValue: false
         label: "DOWN"
         displayText: root.sampleReady ? Model.formatSpeed(root.rxSpeed) : "—"
-        subLabel: root.sampleState
+        subLabel: root.sampleReady ? root.scaleLabel : root.sampleState
         accentColor: root.accentColor
         textColor: root.textColor
         diameter: root.effectiveGaugeDiameter
       }
 
       CircularGauge {
-        value: Math.min(100, root.txSpeed / (1024 * 1024) * 20)
+        value: Math.min(100, root.txSpeed / root.scaleBytes * 100)
+        animateValue: false
         label: "UP"
         displayText: root.sampleReady ? Model.formatSpeed(root.txSpeed) : "—"
-        subLabel: root.sampleState
+        subLabel: root.sampleReady ? root.scaleLabel : root.sampleState
         accentColor: root.accentColor
         textColor: root.textColor
         diameter: root.effectiveGaugeDiameter
+      }
+    }
+
+    Canvas {
+      id: historyGraph
+      objectName: "networkHistoryGraph"
+      visible: root.showHistory
+      width: parent.width
+      height: 36
+      readonly property var points: root.history
+      readonly property real sampleTime: root.historyTime
+      readonly property real scale: root.scaleBytes
+      readonly property color downColor: root.accentColor
+      readonly property color upColor: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.65)
+      onPointsChanged: requestPaint()
+      onSampleTimeChanged: requestPaint()
+      onScaleChanged: requestPaint()
+      onDownColorChanged: requestPaint()
+      onUpColorChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onVisibleChanged: if (visible) requestPaint()
+      onPaint: {
+        var ctx = getContext("2d")
+        ctx.clearRect(0, 0, width, height)
+        ctx.strokeStyle = Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.10)
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(0, height - 1)
+        ctx.lineTo(width, height - 1)
+        ctx.stroke()
+        var channels = ["rx", "tx"]
+        for (var c = 0; c < channels.length; c++) {
+          ctx.strokeStyle = c === 0 ? downColor : upColor
+          ctx.lineWidth = 1.5
+          var lines = History.segments(points, channels[c], sampleTime, width,
+            height - 3, scale, root.samplingInterval * 2.5)
+          for (var i = 0; i < lines.length; i++) {
+            ctx.beginPath()
+            for (var j = 0; j < lines[i].length; j++) {
+              var p = lines[i][j]
+              if (j === 0) ctx.moveTo(p.x, p.y + 1)
+              else ctx.lineTo(p.x, p.y + 1)
+            }
+            ctx.stroke()
+          }
+        }
       }
     }
   }

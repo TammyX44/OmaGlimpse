@@ -3,22 +3,25 @@ import Quickshell
 import Quickshell.Io
 import "WidgetConfig.js" as Config
 import "GpuModel.js" as Gpu
+import "SamplingModel.js" as Sampling
 
 // Shared by the system and temperature cards. Inventory is refreshed slowly;
 // readings use the shortest interval requested by the enabled consumers.
 Item {
   id: root
   property var config: ({})
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
   property var discoveryCommand: ["sh", decodeURIComponent(Qt.resolvedUrl("gpu-discover.sh").toString().replace(/^file:\/\//, ""))]
   readonly property var systemCfg: Config.widgetConfig(root.config, "systemMonitor") || {}
   readonly property var temperatureCfg: Config.widgetConfig(root.config, "temperature") || {}
   readonly property bool systemEnabled: systemCfg.enabled === true && systemCfg.showGpu !== false
   readonly property bool temperatureEnabled: temperatureCfg.enabled === true
     && (!Array.isArray(temperatureCfg.sensors) || temperatureCfg.sensors.indexOf("gpu") !== -1)
-  readonly property bool pollingEnabled: root.systemEnabled || root.temperatureEnabled
-  readonly property int refreshInterval: Math.min(
+  readonly property bool pollingEnabled: root.samplingEnabled && (root.systemEnabled || root.temperatureEnabled)
+  readonly property int refreshInterval: Sampling.interval(Math.min(
     root.systemEnabled ? Config.widgetRefreshInterval(root.config, "systemMonitor") : 60000,
-    root.temperatureEnabled ? Config.widgetRefreshInterval(root.config, "temperature") : 60000)
+    root.temperatureEnabled ? Config.widgetRefreshInterval(root.config, "temperature") : 60000), root.samplingMultiplier)
   property var inventory: []
   property var samples: ({})
   property var nvidiaSamples: ({})
@@ -55,6 +58,7 @@ Item {
   onPollingEnabledChanged: {
     if (pollingEnabled) root.discover()
     else {
+      discoveryProc.running = false
       nvidiaProc.running = false
       root.nvidiaSamples = ({})
       root.samples = ({})
@@ -69,6 +73,7 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        if (!root.pollingEnabled) return
         var next = Gpu.parseInventory(text)
         if (JSON.stringify(next) !== JSON.stringify(root.inventory)) {
           root.inventory = next
@@ -125,7 +130,7 @@ Item {
     onTriggered: root.refreshNvidia()
   }
   Timer {
-    interval: 30000
+    interval: Sampling.interval(30000, root.samplingMultiplier)
     running: root.pollingEnabled
     repeat: true
     onTriggered: root.discover()

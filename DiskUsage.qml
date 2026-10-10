@@ -5,6 +5,7 @@ import qs.Commons
 import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
+import "SamplingModel.js" as Sampling
 
 // Disk usage card: per-mount usage bars with size/used/avail.
 BorderSurface {
@@ -18,6 +19,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property int refreshInterval: Config.widgetRefreshInterval(root.config, root.widgetId)
@@ -25,7 +29,7 @@ BorderSurface {
     ? root.widgetCfg.mounts : []
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   readonly property var diskCommand: {
-    var args = ["env", "LC_ALL=C", "df", "-h", "--output=target,size,used,avail,pcent,source"]
+    var args = ["timeout", "--kill-after=1s", "5s", "env", "LC_ALL=C", "df", "-h", "--output=target,size,used,avail,pcent,source"]
     if (root.mountFilter.length > 0) args.push("--")
     for (var i = 0; i < root.mountFilter.length; i++) {
       var mount = String(root.mountFilter[i] || "").trim()
@@ -53,8 +57,11 @@ BorderSurface {
   property bool stderrReady: false
   property bool exitReady: false
   property bool refreshQueued: false
+  property int sampleEpoch: 0
+  property int pendingSampleEpoch: 0
 
   function refresh() {
+    if (!root.samplingActive) return
     if (diskProc.running) {
       root.refreshQueued = true
       return
@@ -65,6 +72,13 @@ BorderSurface {
     root.stdoutReady = false
     root.stderrReady = false
     root.exitReady = false
+    root.pendingSampleEpoch = root.sampleEpoch
+    if (!root.samplingActive) { root.refreshQueued = false; return }
+    if (root.pendingSampleEpoch !== root.sampleEpoch) {
+      root.refreshQueued = false
+      Qt.callLater(root.refresh)
+      return
+    }
     diskProc.running = true
   }
 
@@ -90,6 +104,7 @@ BorderSurface {
 
   Process {
     id: diskProc
+    objectName: "diskSamplingProcess"
     command: root.diskCommand
     stdout: StdioCollector {
       waitForEnd: true
@@ -115,14 +130,23 @@ BorderSurface {
   }
 
   Timer {
-    interval: root.refreshInterval
-    running: true
+    objectName: "diskSamplingTimer"
+    interval: Sampling.interval(root.refreshInterval, root.samplingMultiplier)
+    running: root.samplingActive
     repeat: true
     onTriggered: root.refresh()
   }
 
   Component.onCompleted: root.refresh()
   onMountFilterChanged: Qt.callLater(function() { root.refresh() })
+  onSamplingActiveChanged: {
+    root.sampleEpoch += 1
+    if (root.samplingActive) Qt.callLater(root.refresh)
+    else {
+      root.refreshQueued = false
+      diskProc.running = false
+    }
+  }
 
   Column {
     id: content

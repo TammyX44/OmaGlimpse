@@ -15,6 +15,15 @@ PanelWindow {
 
   property var config: ({})
   property var gpuDevices: []
+  property var displayInventory: []
+  property string selectedDisplay: ""
+  property bool undoAvailable: false
+  property string layoutStatus: ""
+  property bool layoutBusy: false
+  signal displaySelected(string name)
+  signal editorChanged(string key, var value)
+  signal undoRequested()
+  signal namedLayoutRequested(string name, string action)
   property color accentColor: Color.accent
   property color textColor: Color.foreground
   property color cardColor: Color.popups.background
@@ -681,6 +690,22 @@ PanelWindow {
           }
 
           // Position presets
+          LayoutEditorControls {
+            enabled: !panel.layoutBusy
+            width: parent.width
+            config: panel.config
+            displayInventory: panel.displayInventory
+            selectedDisplay: panel.selectedDisplay
+            undoAvailable: panel.undoAvailable
+            statusText: panel.layoutStatus
+            hostActive: panel.visible
+            dismissRevision: panel.menuRevision
+            onDisplaySelected: function(name) { panel.displaySelected(name) }
+            onEditorChanged: function(key, value) { panel.editorChanged(key, value) }
+            onUndoRequested: panel.undoRequested()
+            onNamedLayoutRequested: function(name, action) { panel.namedLayoutRequested(name, action) }
+          }
+
           Text {
             textFormat: Text.PlainText
             text: "Position presets"
@@ -1837,6 +1862,48 @@ PanelWindow {
                       options: [{ value: "auto", label: "Auto-detect" }]
                       onChanged: function(value) { panel.widgetConfigChanged(widgetSection.wid, "interface", value) }
                     }
+                  }
+                }
+
+                // Network gauge reference and bounded traffic history.
+                Column {
+                  width: expandedSettings.rowWidth; spacing: 8
+                  visible: widgetSection.wid === "networkSpeed"
+                  Text { text: "Gauge scale"; color: panel.textColor; font.family: Style.font.family; font.pixelSize: 12 }
+                  WidgetDropdown {
+                    objectName: widgetSection.wid === "networkSpeed" ? "networkScaleDropdown" : ""
+                    width: parent.width; height: 32
+                    value: widgetSection.wcfg.scaleMode || "auto"
+                    hostActive: panel.visible && widgetSection.expanded
+                    dismissRevision: panel.menuRevision
+                    options: [{value: "auto", label: "Automatic"}, {value: "fixed", label: "Fixed limit"}]
+                    onChanged: function(value) { panel.widgetConfigChanged(widgetSection.wid, "scaleMode", value) }
+                  }
+                  Text { width: parent.width; visible: widgetSection.wcfg.scaleMode === "fixed"; text: "Scale limit (MB/s)"; color: panel.textColor; font.family: Style.font.family; font.pixelSize: 12 }
+                  Rectangle {
+                    width: parent.width; height: 34; radius: 6
+                    visible: widgetSection.wcfg.scaleMode === "fixed"
+                    color: panel.cardColor; border.width: 1; border.color: scaleInput.activeFocus ? panel.accentColor : panel.borderColor
+                    TextInput {
+                      id: scaleInput
+                      anchors.fill: parent; anchors.margins: 8
+                      text: String(widgetSection.wcfg.scaleLimitMbps || 5)
+                      color: panel.textColor; font.family: Style.font.family; font.pixelSize: 12
+                      selectByMouse: true; clip: true; maximumLength: 10
+                      Accessible.name: "Network gauge limit in megabytes per second"
+                      validator: DoubleValidator { bottom: 0.01; top: 100000; decimals: 2; locale: "C" }
+                      onEditingFinished: {
+                        var n = Number(text)
+                        if (isFinite(n) && n >= 0.01 && n <= 100000) panel.widgetConfigChanged(widgetSection.wid, "scaleLimitMbps", n)
+                        else text = String(widgetSection.wcfg.scaleLimitMbps || 5)
+                      }
+                    }
+                  }
+                  Toggle {
+                    width: parent.width; label: "Traffic history"
+                    description: "Show recent upload and download activity."
+                    checked: widgetSection.wcfg.showHistory !== false
+                    onClicked: panel.widgetConfigChanged(widgetSection.wid, "showHistory", !checked)
                   }
                 }
 

@@ -6,6 +6,7 @@ import qs.Commons
 import qs.Ui
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
+import "SamplingModel.js" as Sampling
 
 // Media now-playing card.
 // Player selection follows the same priority pattern as Omarchy's
@@ -30,6 +31,9 @@ BorderSurface {
   property color accentColor: Color.accent
   property real cardRadius: 18
   property real gaugeDiameter: 120
+  property bool samplingEnabled: true
+  property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property bool showAlbumArt: root.widgetCfg.showAlbumArt !== false
@@ -139,7 +143,7 @@ BorderSurface {
       root.artworkProcess = null
     }
     root.artworkSource = ""
-    if (!root.showAlbumArt || !root.hasMedia) return
+    if (root.samplingActive === false || !root.showAlbumArt || !root.hasMedia) return
 
     var url = String(root.artUrl)
     if ((url.startsWith("/") && !url.startsWith("//"))
@@ -206,67 +210,79 @@ BorderSurface {
   readonly property bool canSeek: !!(activePlayer && activePlayer.canSeek
     && activePlayer.positionSupported && trackLength > 0)
   property real livePosition: 0
+  property real positionSampleAt: Date.now()
   property bool seeking: false
   property real seekPreview: 0
   readonly property real shownPosition: seeking ? seekPreview : livePosition
   readonly property real progress: trackLength > 0 ? Math.max(0, Math.min(1, shownPosition / trackLength)) : 0
+
+  function syncPosition() {
+    root.positionSampleAt = Date.now()
+    if (!root.samplingActive || root.seeking) return
+    root.livePosition = root.activePlayer && root.activePlayer.position >= 0
+      ? root.activePlayer.position : 0
+  }
+  onSamplingActiveChanged: {
+    root.seeking = false
+    root.syncPosition()
+    root.refreshArtwork()
+  }
+  onIsPlayingChanged: root.syncPosition()
 
   // Sync from real MPRIS position when it changes
   Connections {
     target: root.activePlayer
     ignoreUnknownSignals: true
     function onPositionChanged() {
-      if (!root.seeking && root.activePlayer && root.activePlayer.position >= 0) {
-        root.livePosition = root.activePlayer.position
-      }
+      root.syncPosition()
     }
     function onTrackTitleChanged() {
-      root.livePosition = root.activePlayer ? (root.activePlayer.position || 0) : 0
+      root.syncPosition()
     }
     function onLengthChanged() {
-      root.livePosition = root.activePlayer ? (root.activePlayer.position || 0) : 0
+      root.syncPosition()
     }
   }
 
   // Reset when active player changes
   onActivePlayerChanged: {
-    root.livePosition = root.activePlayer ? (root.activePlayer.position || 0) : 0
+    root.syncPosition()
   }
 
   Component.onCompleted: {
     root.refreshArtwork()
-    if (root.activePlayer && root.activePlayer.position >= 0) {
-      root.livePosition = root.activePlayer.position
-    }
+    root.syncPosition()
   }
 
-  // Tick forward 1 second while playing
+  // Use elapsed time so slowing the timer does not slow track progress.
   Timer {
     id: positionTimer
-    interval: 1000
+    objectName: "mediaPositionTimer"
+    interval: Sampling.interval(1000, root.samplingMultiplier)
     repeat: true
-    running: root.isPlaying && root.trackLength > 0
+    running: root.samplingActive && root.isPlaying && root.trackLength > 0
     onTriggered: {
-      if (root.livePosition < root.trackLength) {
-        root.livePosition += 1
-      } else {
-        root.livePosition = root.trackLength
-      }
+      var now = Date.now()
+      root.livePosition = Math.min(root.trackLength,
+        root.livePosition + Math.max(0, now - root.positionSampleAt) / 1000)
+      root.positionSampleAt = now
     }
   }
 
   // Periodic sync to correct drift (many players don't emit positionChanged)
   Timer {
     id: positionSyncTimer
-    interval: 5000
+    objectName: "mediaPositionSyncTimer"
+    interval: Sampling.interval(5000, root.samplingMultiplier)
     repeat: true
-    running: root.hasMedia && root.activePlayer !== null
+    running: root.samplingActive && root.hasMedia && root.activePlayer !== null
     onTriggered: {
       if (root.activePlayer && root.activePlayer.position >= 0) {
         var realPos = root.activePlayer.position
         var diff = Math.abs(realPos - root.livePosition)
         if (diff > 3) {
           root.livePosition = realPos
+          root.positionSampleAt = Date.now()
         }
       }
     }
@@ -311,6 +327,7 @@ BorderSurface {
     var newPos = root.seekPreview
     root.seeking = false
     root.livePosition = newPos
+    root.positionSampleAt = Date.now()
     root.activePlayer.position = newPos
   }
 

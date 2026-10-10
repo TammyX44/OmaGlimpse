@@ -8,6 +8,11 @@ function defaultConfig() {
   return {
     version: 3,
     gpuLayoutRevision: 1,
+    editor: { snapToGrid: true, snapToCards: true, gridSize: 8 },
+    namedLayouts: {},
+    monitorLayouts: {},
+    monitorDisplays: {},
+    activeMonitorLayout: "",
     themeMode: "theme",
     colors: {
       accent: "",
@@ -73,6 +78,9 @@ function defaultConfig() {
         y: -1,
         refreshInterval: 1000,
         interface: "auto",
+        scaleMode: "auto",
+        scaleLimitMbps: 5,
+        showHistory: true,
         cardWidth: 0,
         gaugeDiameter: 110
       },
@@ -177,6 +185,14 @@ function parseConfig(raw) {
 
   var defaults = defaultConfig()
   cfg = deepMerge(defaults, cfg)
+  if (!plainObject(cfg.editor)) cfg.editor = defaults.editor
+  cfg.editor.snapToGrid = cfg.editor.snapToGrid !== false
+  cfg.editor.snapToCards = cfg.editor.snapToCards !== false
+  cfg.editor.gridSize = bounded(cfg.editor.gridSize, 8, 4, 64)
+  for (var mapKey of ["namedLayouts", "monitorLayouts", "monitorDisplays"]) {
+    if (!plainObject(cfg[mapKey])) cfg[mapKey] = {}
+  }
+  cfg.activeMonitorLayout = typeof cfg.activeMonitorLayout === "string" ? cfg.activeMonitorLayout : ""
   // Older saved positions predate the extra GPU labels. Repair them once,
   // after the rendered card sizes are available, rather than guessing here.
   cfg.gpuLayoutRevision = !trimmed || saved.gpuLayoutRevision === 1 ? 1 : 0
@@ -227,6 +243,8 @@ function parseConfig(raw) {
   monitor.gpuAliases = aliases
   cfg.widgets.diskUsage.mounts = Array.isArray(cfg.widgets.diskUsage.mounts)
     ? cfg.widgets.diskUsage.mounts.filter(function(mount) { return typeof mount === "string" && mount.charAt(0) === "/" }) : []
+  cfg.widgets.networkSpeed.scaleMode = cfg.widgets.networkSpeed.scaleMode === "fixed" ? "fixed" : "auto"
+  cfg.widgets.networkSpeed.scaleLimitMbps = bounded(cfg.widgets.networkSpeed.scaleLimitMbps, 5, 0.01, 100000)
   return cfg
 }
 
