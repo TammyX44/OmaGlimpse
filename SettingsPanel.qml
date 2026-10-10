@@ -20,6 +20,7 @@ PanelWindow {
   property bool undoAvailable: false
   property string layoutStatus: ""
   property bool layoutBusy: false
+  property var cardMetrics: ({})
   signal displaySelected(string name)
   signal editorChanged(string key, var value)
   signal undoRequested()
@@ -1294,48 +1295,19 @@ PanelWindow {
                   }
                 }
 
-                // Card width — available for ALL widgets
-                Row {
+                // Independent width/height with a natural-size reset for every card.
+                WidgetSizeControls {
                   width: expandedSettings.rowWidth
-                  spacing: 8
-                  height: 28
-
-                  Text {
-                    textFormat: Text.PlainText
-                    text: "Card Width"
-                    color: Qt.rgba(panel.textColor.r, panel.textColor.g, panel.textColor.b, 0.72)
-                    font.family: Style.font.family
-                    font.pixelSize: 11
-                    width: expandedSettings.labelWidth
-                    anchors.verticalCenter: parent.verticalCenter
-                  }
-
-                  PanelSlider {
-                    width: parent.width - expandedSettings.labelWidth - 60 - 16
-                    height: 28
-                    value: {
-                      var w = panel.widgetNumber(widgetSection.wcfg, "cardWidth", 0)
-                      return w > 0 ? w : 300
-                    }
-                    minimum: 200
-                    maximum: 500
-                    step: 10
-                    integer: true
-                    onMoved: panel.widgetConfigChanged(widgetSection.wid, "cardWidth", Math.round(value))
-                  }
-
-                  Text {
-                    textFormat: Text.PlainText
-                    text: {
-                      var w = panel.widgetNumber(widgetSection.wcfg, "cardWidth", 0)
-                      return (w > 0 ? w : 300) + "px"
-                    }
-                    color: Qt.rgba(panel.textColor.r, panel.textColor.g, panel.textColor.b, 0.65)
-                    font.family: Style.font.family
-                    font.pixelSize: 11
-                    width: 60
-                    anchors.verticalCenter: parent.verticalCenter
-                  }
+                  widgetId: widgetSection.wid
+                  widgetCfg: widgetSection.wcfg
+                  labelWidth: expandedSettings.labelWidth
+                  minimumHeight: widgetSection.wcfg.enabled !== false && panel.cardMetrics[widgetSection.wid]
+                    ? panel.cardMetrics[widgetSection.wid].minimumHeight : 80
+                  actualHeight: panel.cardMetrics[widgetSection.wid] ? panel.cardMetrics[widgetSection.wid].height : 0
+                  enabled: !panel.layoutBusy
+                  textColor: panel.textColor
+                  accentColor: panel.accentColor
+                  onDimensionChanged: function(key, value) { panel.widgetConfigChanged(widgetSection.wid, key, value) }
                 }
 
                 // Card opacity — available for ALL widgets

@@ -5,6 +5,7 @@ import qs.Commons
 import qs.Ui
 import "ProcessModel.js" as Model
 import "WidgetConfig.js" as Config
+import "WidgetSizing.js" as Sizing
 
 // Top processes card: lists the top CPU-consuming processes.
 // Config-driven colors, refresh interval, process count, and sort order.
@@ -39,7 +40,8 @@ BorderSurface {
   padding: 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 300
-  height: content.implicitHeight + 40
+  readonly property real naturalCardHeight: content.implicitHeight + 40
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
 
   property var processes: []
@@ -208,12 +210,12 @@ BorderSurface {
 
   Column {
     id: content
+    objectName: "widgetSizingContent"
     anchors.left: parent.left
     anchors.right: parent.right
-    anchors.top: parent.top
+    anchors.verticalCenter: parent.verticalCenter
     anchors.leftMargin: 20
     anchors.rightMargin: 20
-    anchors.topMargin: 20
     spacing: 10
 
     Text {

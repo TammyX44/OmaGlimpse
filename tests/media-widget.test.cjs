@@ -170,7 +170,8 @@ function layoutExpression(marker, property, indent) {
 for (const showControls of [true, false]) {
   test(`media state changes preserve space above a neighbor (controls ${showControls ? 'shown' : 'hidden'})`, () => {
     const layout = {
-      root: { showControls, hasMedia: false, trackLength: 0, isPlaying: false },
+      root: { showControls, hasMedia: false, trackLength: 0, isPlaying: false, widgetCfg: { cardHeight: 0 } },
+      Sizing: require('../WidgetSizing.js'),
       content: { anchors: {} },
       trackInfo: {}, seekRow: {}, transportRow: {}
     }
@@ -180,12 +181,16 @@ for (const showControls of [true, false]) {
       layout[id].height = evaluate(layoutExpression(`id: ${id}`, 'height', 6))
     }
     layout.content.spacing = evaluate(layoutExpression('id: content', 'spacing', 4))
-    layout.content.anchors.topMargin = evaluate(layoutExpression('id: content', 'anchors.topMargin', 4))
+    Object.defineProperty(layout.content.anchors, 'topMargin', {
+      get: () => evaluate(layoutExpression('id: content', 'anchors.topMargin', 4))
+    })
     // The placeholder fills the reserved card. Depending on its resulting
     // implicit height here would introduce a recursive size binding.
     Object.defineProperty(layout.content, 'implicitHeight', {
       get() { throw new Error('media card height depends on changing content.implicitHeight') }
     })
+    const naturalExpression = source.match(/^  readonly property real naturalCardHeight: ([^\n]+(?:\n {4,}[^\n]+)*)/m)[1]
+    Object.defineProperty(layout.root, 'naturalCardHeight', { get: () => evaluate(naturalExpression) })
     const heightExpression = layoutExpression('id: root', 'height', 2)
     Object.defineProperty(layout.root, 'height', { get: () => evaluate(heightExpression) })
 
@@ -218,5 +223,13 @@ for (const showControls of [true, false]) {
         assert.equal(placeholderHeight + 2 * layout.content.anchors.topMargin, height)
       }
     }
+    layout.root.widgetCfg.cardHeight = 360
+    for (const hasMedia of [false, true]) {
+      layout.root.hasMedia = hasMedia
+      assert.equal(layout.root.height, 360)
+      assert.equal(layout.content.anchors.topMargin, hasMedia ? 16 + (360 - idleHeight) / 2 : 16)
+    }
+    layout.root.widgetCfg.cardHeight = 80
+    assert.equal(layout.root.height, idleHeight, 'short requests retain the playback footprint')
   })
 }

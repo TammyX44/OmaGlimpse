@@ -6,6 +6,7 @@ import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Disk usage card: per-mount usage bars with size/used/avail.
 BorderSurface {
@@ -44,7 +45,8 @@ BorderSurface {
   padding: 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 300
-  height: content.implicitHeight + 40
+  readonly property real naturalCardHeight: content.implicitHeight + 40
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
 
   property var disks: []
@@ -150,12 +152,12 @@ BorderSurface {
 
   Column {
     id: content
+    objectName: "widgetSizingContent"
     anchors.left: parent.left
     anchors.right: parent.right
-    anchors.top: parent.top
+    anchors.verticalCenter: parent.verticalCenter
     anchors.leftMargin: 20
     anchors.rightMargin: 20
-    anchors.topMargin: 20
     spacing: 10
 
     Text {

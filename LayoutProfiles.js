@@ -1,10 +1,16 @@
 // Layout-only snapshots keep telemetry, colors and GPU preferences independent.
-var fields = ["enabled", "x", "y", "cardWidth", "gaugeDiameter"]
+var fields = ["enabled", "x", "y", "cardWidth", "cardHeight", "gaugeDiameter"]
 var ids = ["systemMonitor", "battery", "media", "topProcesses", "networkSpeed", "diskUsage", "temperature"]
 
 function clone(value) { return JSON.parse(JSON.stringify(value)) }
 function safeName(value) { return String(value || "").replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 48) }
 function own(obj, key) { return Object.prototype.hasOwnProperty.call(obj || {}, key) }
+function cardHeightOrAuto(value) {
+  if (typeof value !== "number" && typeof value !== "string") return 0
+  if (String(value).trim() === "") return 0
+  var n = Number(value)
+  return !isFinite(n) || n === 0 ? 0 : Math.max(80, Math.min(1000, Math.round(n)))
+}
 function snapshot(config) {
   var widgets = {}
   ids.forEach(function(id) {
@@ -20,7 +26,10 @@ function apply(config, saved) {
   ids.forEach(function(id) {
     var src = saved.widgets[id]
     if (!src || !next.widgets[id]) return
+    // Legacy layouts predate manual height; restore their Auto sizing too.
+    next.widgets[id].cardHeight = cardHeightOrAuto(own(src, "cardHeight") ? src.cardHeight : 0)
     fields.forEach(function(key) {
+      if (key === "cardHeight") return
       if (!own(src, key)) return
       var v = src[key]
       if (key === "enabled") { if (typeof v === "boolean") next.widgets[id][key] = v; return }

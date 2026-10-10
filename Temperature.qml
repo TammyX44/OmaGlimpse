@@ -8,6 +8,7 @@ import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "GpuModel.js" as Gpu
 import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Temperature sensors card: flat list layout.
 // Large hottest temp + status on the left, vertical divider,
@@ -50,7 +51,8 @@ BorderSurface {
   padding: 16
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 240
-  height: 110
+  readonly property real naturalCardHeight: Math.max(110, content.implicitHeight + 32)
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
   // --- State ---
   property var temps: []
@@ -246,6 +248,7 @@ BorderSurface {
   // Layout: large temp + status on left | divider | sensor rows on right
   Row {
     id: content
+    objectName: "widgetSizingContent"
     anchors.centerIn: parent
     spacing: root.contentSpacing
 

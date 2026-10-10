@@ -90,6 +90,21 @@ ShellRoot {
         desktop.namedLayout("Work", "delete")
         verify(!Object.prototype.hasOwnProperty.call(desktop.config.namedLayouts, "Work"))
       }
+      function test_f_height_undo_and_settings_control() {
+        desktop.undoStack = []
+        desktop.lastHistoryGroup = ""
+        desktop.updateWidgetConfig("battery", "cardHeight", 360)
+        compare(desktop.config.widgets.battery.cardHeight, 360)
+        compare(desktop.undoStack.length, 1)
+        desktop.undoLayout()
+        compare(desktop.config.widgets.battery.cardHeight, 0)
+        var heightSlider = findChild(settings.contentItem, "networkSpeedHeightSlider")
+        var widthSlider = findChild(settings.contentItem, "networkSpeedWidthSlider")
+        verify(heightSlider !== null)
+        verify(widthSlider !== null)
+        var auto = findChild(settings.contentItem, "networkSpeedHeightAuto")
+        verify(auto !== null)
+      }
       function test_d_native_settings_and_narrow_controls() {
         verify(findChild(settings.contentItem, "layoutDisplayPicker") !== null)
         for (var i = 0; i < 2; i++) {

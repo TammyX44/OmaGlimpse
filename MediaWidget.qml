@@ -7,6 +7,7 @@ import qs.Ui
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Media now-playing card.
 // Player selection follows the same priority pattern as Omarchy's
@@ -48,8 +49,9 @@ BorderSurface {
   width: widgetCardWidth > 0 ? widgetCardWidth : 340
   // Reserve the playback footprint even while no player or duration is
   // available. Neighbouring cards may have saved positions below this one.
-  height: trackInfo.height + seekRow.height + content.spacing
+  readonly property real naturalCardHeight: trackInfo.height + seekRow.height + content.spacing
     + (root.showControls ? transportRow.height + content.spacing : 0) + 24
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
   // ── Player selection (mirrors Omarchy Service.qml logic) ──
 
@@ -345,12 +347,13 @@ BorderSurface {
 
   Column {
     id: content
+    objectName: "widgetSizingContent"
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.top: parent.top
     anchors.leftMargin: 16
     anchors.rightMargin: 16
-    anchors.topMargin: 16
+    anchors.topMargin: root.hasMedia ? 16 + Math.max(0, (root.height - root.naturalCardHeight) / 2) : 16
     spacing: 14
 
     // --- Placeholder when no media ---

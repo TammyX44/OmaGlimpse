@@ -570,8 +570,8 @@ PanelWindow {
 
   function updateWidgetConfig(widgetId, key, value) {
     if (!root.config.widgets || !root.config.widgets[widgetId]) return
-    if (root.layoutSwitchPending && ["enabled", "x", "y", "cardWidth", "gaugeDiameter"].indexOf(key) !== -1) return
-    if (["enabled", "x", "y", "cardWidth", "gaugeDiameter"].indexOf(key) !== -1
+    if (root.layoutSwitchPending && ["enabled", "x", "y", "cardWidth", "cardHeight", "gaugeDiameter"].indexOf(key) !== -1) return
+    if (["enabled", "x", "y", "cardWidth", "cardHeight", "gaugeDiameter"].indexOf(key) !== -1
         && root.config.widgets[widgetId][key] !== value) root.recordLayoutChange(widgetId + ":" + (key === "x" || key === "y" ? "position" : key))
     var c = shallowClone(root.config)
     c.widgets = shallowClone(c.widgets)
@@ -1117,6 +1117,19 @@ PanelWindow {
     if ("samplingMultiplier" in item) item.samplingMultiplier = Qt.binding(function() { return samplingPolicy.samplingMultiplier })
     if (widgetId === "systemMonitor" || widgetId === "temperature") item.gpuMonitor = gpuMonitor
     if (widgetId === "systemMonitor") item.editMode = root.editMode
+    root.updateCardMetric(item, widgetId)
+  }
+
+  // Live natural dimensions let height controls honour the content floor.
+  property var cardMetrics: ({})
+  function updateCardMetric(item, widgetId) {
+    if (!item) return
+    var metric = { width: item.width, height: item.height, minimumHeight: item.naturalCardHeight }
+    var old = root.cardMetrics[widgetId]
+    if (old && old.width === metric.width && old.height === metric.height && old.minimumHeight === metric.minimumHeight) return
+    var next = shallowClone(root.cardMetrics)
+    next[widgetId] = metric
+    root.cardMetrics = next
   }
 
   // Cache of last known card sizes by widget ID.
@@ -1263,6 +1276,9 @@ PanelWindow {
         target: cardLoader.item
         ignoreUnknownSignals: true
         function onGpuSelected(deviceId) { root.updateWidgetConfig("systemMonitor", "gpuDevice", deviceId) }
+        function onNaturalCardHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
+        function onWidthChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
+        function onHeightChanged() { root.updateCardMetric(cardLoader.item, card.widgetId) }
       }
 
       // Re-apply props when config changes
@@ -1603,6 +1619,7 @@ PanelWindow {
     undoAvailable: root.undoStack.length > 0 && !root.layoutSwitchPending
     layoutStatus: root.layoutStatus
     layoutBusy: root.layoutSwitchPending
+    cardMetrics: root.cardMetrics
     onDisplaySelected: function(name) { root.selectDisplay(name) }
     onEditorChanged: function(key, value) { root.updateEditor(key, value) }
     onUndoRequested: root.undoLayout()

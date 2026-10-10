@@ -7,6 +7,7 @@ import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // System monitor card: CPU, RAM, and GPU circular gauges.
 // Colors, refresh interval, and sub-widget visibility are config-driven.
@@ -51,7 +52,8 @@ BorderSurface {
   padding: 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, gaugeRow.implicitWidth + 40)
-  height: gaugeRow.implicitHeight + 40
+  readonly property real naturalCardHeight: Math.max(80, gaugeRow.implicitHeight + 40)
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
 
   // --- CPU data ---
@@ -153,6 +155,7 @@ BorderSurface {
 
   Row {
     id: gaugeRow
+    objectName: "widgetSizingContent"
     anchors.centerIn: parent
     spacing: 16
 

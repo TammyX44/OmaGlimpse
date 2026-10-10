@@ -5,6 +5,7 @@ import qs.Commons
 import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
+import "WidgetSizing.js" as Sizing
 import "NetworkHistory.js" as History
 
 // Network speed card: download and upload speed gauges.
@@ -46,7 +47,8 @@ BorderSurface {
   padding: 20
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, gaugeRow.implicitWidth + 40)
-  height: content.implicitHeight + 40
+  readonly property real naturalCardHeight: content.implicitHeight + 40
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
 
   property var prevDevs: null
@@ -184,6 +186,7 @@ BorderSurface {
 
   Column {
     id: content
+    objectName: "widgetSizingContent"
     anchors.centerIn: parent
     spacing: 8
     width: root.width - 40

@@ -39,6 +39,8 @@ test('monitor transition freezes layout edits and preserves the outgoing arrange
   root.beginMonitorSwitch()
   root.updateWidgetConfig('battery', 'x', 700)
   assert.equal(root.config.widgets.battery.x, 1600)
+  root.updateWidgetConfig('battery', 'cardHeight', 400)
+  assert.equal(root.config.widgets.battery.cardHeight, 0)
   root.updateWidgetConfig('battery', 'showPower', false)
   context.finishSwitch()
   assert.equal(root.config.monitorLayouts.large.widgets.battery.x, 1600)

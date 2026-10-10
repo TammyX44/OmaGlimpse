@@ -318,7 +318,7 @@ class ProcessRuntimeTest(unittest.TestCase):
             # Copy the assigned component plus its dependencies. The running
             # desktop and source checkout are never used as a test config.
             for name in ("TopProcesses.qml", "ProcessModel.js", "WidgetConfig.js", "process_snapshot.py",
-                         "SamplingPolicy.qml", "SamplingModel.js"):
+                         "SamplingPolicy.qml", "SamplingModel.js", "WidgetSizing.js"):
                 shutil.copyfile(REPO / name, stage / name)
             (stage / "shell.qml").write_text(QML)
             (stage / "fixture.py").write_text(FIXTURE)

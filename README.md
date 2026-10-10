@@ -39,6 +39,7 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 | `ArtworkPlaceholder.qml`, `fetch_album_art.py` | Draw a theme-matched media placeholder and safely fetch bounded remote cover images. |
 | `SamplingPolicy.qml`, `SamplingModel.js` | Coordinate lock, display power and power-saver sampling across the cards. |
 | `LayoutProfiles.js`, `WidgetLayout.js`, `LayoutEditorControls.qml` | Remember monitor and named layouts, snap cards, and provide the layout editor. |
+| `WidgetSizing.js`, `WidgetSizeControls.qml` | Size cards without cropping their content and provide independent width/height controls with Auto resets. |
 | `ProcessModel.js`, `process_snapshot.py`, `NetworkHistory.js` | Calculate interval process CPU readings and bounded network history and scaling. |
 | `tests/`, `.github/workflows/` | Check widget behavior and manifest validity locally and in CI. |
 | `assets/`, `preview.png` | Hold the approved screenshots, demo video, and marketplace preview. |
@@ -83,6 +84,8 @@ Enable edit mode to see alignment guides while dragging. Grid snapping and card-
 
 Save a named arrangement such as Work or Gaming and load it later. Replacing or deleting a named layout requires a second click. **Widget display** selects the monitor that holds the desktop cards. Each connected monitor arrangement, resolution and scale remembers its own layout; reconnecting a known setup restores it. A smaller setup fits manual positions to its usable area without changing the arrangement saved for the larger setup. Cards that cannot fit still produce the existing layout warning. The cards occupy one selected display at a time.
 
+Every card's expanded settings include independent **Card Width** and **Card Height** sliders, with an **Auto** reset for each dimension. Height defaults to Auto, preserving existing layouts. Manual height is a minimum footprint: a card grows if its content needs more room, so gauges, profile pills, media controls and longer lists are never cut off. Enabled cards report their content minimum to the settings slider. Height changes are included in Undo, named layouts and monitor layouts; older saved layouts restore Auto height.
+
 ### Sampling and live readings
 
 All card collectors pause while the session is locked, the selected display is powered off, or the overlay is hidden. Sampling intervals become three times longer in power-saver mode, with an immediate refresh on resume. UPower and MPRIS continue providing their normal event-driven updates. Lock and display state use bounded IPC checks every two seconds; a failed check retains the last known state. This is a polling reduction, not a claim of zero CPU use.
@@ -120,6 +123,7 @@ sh tests/run-gpu-qml-tests.sh
 sh tests/sampling-run-qml-tests.sh
 NETWORK_QML_TESTS=1 node --test tests/network-history.test.cjs
 sh tests/run-layout-qml-tests.sh
+sh tests/run-sizing-qml-tests.sh
 ```
 
 The optional QML checks need an installed Omarchy shell, Quickshell, and QtTest. They use temporary settings and simulated Intel/NVIDIA/AMD telemetry to check scrolling, swiping, keyboard/arrow controls, stable sizing, shared temperatures, and collector lifecycle. Set `OMARCHY_SHELL_DIR` if the shell is installed somewhere other than `/usr/share/omarchy/shell`. They leave desktop settings untouched.

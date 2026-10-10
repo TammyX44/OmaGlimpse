@@ -8,6 +8,7 @@ import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "WidgetModel.js" as Model
 import "SamplingModel.js" as Sampling
+import "WidgetSizing.js" as Sizing
 
 // Battery & power card: circular charge gauge, status text, and
 // power profile picker. Config-driven colors and refresh interval.
@@ -42,7 +43,8 @@ BorderSurface {
   padding: 16
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(260, root.widgetGaugeDiameter + 48)
-  height: content.implicitHeight + 32
+  readonly property real naturalCardHeight: content.implicitHeight + 32
+  height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight)
 
 
   readonly property var batteryDevice: UPower.displayDevice
@@ -297,6 +299,7 @@ BorderSurface {
 
   Column {
     id: content
+    objectName: "widgetSizingContent"
     width: root.width - 24
     anchors.centerIn: parent
     spacing: 10
