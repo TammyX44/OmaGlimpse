@@ -199,9 +199,38 @@ ShellRoot {
         keyClick(Qt.Key_Return)
         compare(dimensions.signalArguments[0][1], 0)
       }
+      function test_e_system_rings_do_not_shrink_when_height_grows() {
+        for (var showGpu of [true,false]) {
+        for (var width of [200,391,500]) {
+          for (var preferred of [40,100,109,180]) {
+            var previous = 0
+            for (var height of [110,120,150,159,160,169,170,171,180,187,188,189,190,199,200,210,220,224,225,240,260,300,400]) {
+              var cfg = Config.defaultConfig()
+              cfg.widgets.systemMonitor.showGpu = showGpu
+              cfg.widgets.systemMonitor.cardWidth = width
+              cfg.widgets.systemMonitor.cardHeight = height
+              cfg.widgets.systemMonitor.gaugeDiameter = preferred
+              system.config = cfg
+              wait(30)
+              compare(system.height, height)
+              verify(system.effectiveGaugeDiameter + 0.01 >= previous,
+                "rings shrank at " + width + "x" + height + " preferred " + preferred + " GPU " + showGpu)
+              previous = system.effectiveGaugeDiameter
+              assertContentFits(system)
+            }
+          }
+        }
+        }
+        system.config = {widgets:{systemMonitor:{cardWidth:391,cardHeight:170,gaugeDiameter:109}}}
+        wait(50)
+        compare(system.compactLayout, true)
+        compare(system.effectiveGaugeDiameter, 102)
+        compare(system.height, 170)
+      }
       function test_z_capture_safe_fixture() {
         if (!Quickshell.env("SIZING_TEST_IMAGE") && !Quickshell.env("SIZING_GEOMETRY_ONLY")) return
         var compact = !!Quickshell.env("SIZING_COMPACT_IMAGE")
+        var savedSize = !!Quickshell.env("SIZING_SAVED_SIZE_IMAGE")
         configure(system, 500, compact ? 110 : 0)
         configure(battery, 260, compact ? 80 : 0)
         configure(temperature, 240, compact ? 80 : 0)
@@ -209,6 +238,14 @@ ShellRoot {
         configure(processes, 330, compact ? 100 : 0)
         configure(disk, 330, compact ? 80 : 0)
         configure(network, 330, compact ? 90 : 0)
+        if (savedSize) {
+          system.config = {widgets:{systemMonitor:{cardWidth:391,cardHeight:170,gaugeDiameter:109}}}
+          configure(media, 340, 180)
+          system.x = 24; system.y = 24
+          media.x = 49; media.y = 260
+          for (var card of [battery,temperature,processes,disk,network]) card.visible = false
+          controls.visible = false
+        }
         system.cpuReady = true; system.cpuValue = 18; system.cpuUser = 12
         system.memReady = true; system.memValue = 46; system.ramUsedGb = 7.2; system.ramFreeGb = 8.4
         system.gpuMonitor = {discoveryReady:true,devices:[
@@ -226,7 +263,7 @@ ShellRoot {
         network.sampleReady = true; network.activeInterface = "demo0"
         network.rxSpeed = 1250000; network.txSpeed = 180000; network.autoScale = 2000000
         wait(400)
-        for (var card of cards) {
+        for (var card of (savedSize ? [system,media] : cards)) {
           assertContentFits(card)
           verify(card.x + card.width <= preview.width)
           verify(card.y + card.height <= preview.height)
@@ -237,7 +274,8 @@ ShellRoot {
         }
         if (!Quickshell.env("SIZING_TEST_IMAGE")) return
         var saved = false
-        preview.grabToImage(function(result) { saved = result.saveToFile(Quickshell.env("SIZING_TEST_IMAGE")) })
+        var captureTarget = savedSize ? system : preview
+        captureTarget.grabToImage(function(result) { saved = result.saveToFile(Quickshell.env("SIZING_TEST_IMAGE")) })
         tryVerify(function() { return saved }, 2000)
       }
     }

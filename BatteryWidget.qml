@@ -36,14 +36,24 @@ BorderSurface {
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
-  readonly property bool compactLayout: root.requestedHeight > 0 && root.requestedHeight < 200
-  readonly property real minimumCardHeight: 80
   readonly property bool profilesVisible: root.showProfiles && root.profiles.length > 0
+  readonly property real preferredGaugeDiameter: Math.min(root.widgetGaugeDiameter,
+    Math.max(60, root.width - 32))
+  // Only stack the label/status/pills once the full preferred ring fits too.
+  // These footprints never depend on compact content or the card's height.
+  readonly property real fullLayoutOverhead: 32 + 5 + Math.ceil(batteryFont.height) + 10 + 16
+    + (root.profilesVisible ? 36 : 0) + (root.profileError ? 10 + profileErrorText.implicitHeight : 0)
+  readonly property real compactLayoutOverhead: 16 + (root.profilesVisible ? 30 : 0)
+  readonly property bool compactLayout: root.requestedHeight > 0
+    && root.requestedHeight < root.preferredGaugeDiameter + root.fullLayoutOverhead
+  readonly property real minimumCardHeight: 80
   readonly property real effectiveGaugeDiameter: root.requestedHeight > 0
-    ? Math.max(root.compactLayout ? 34 : 60, Math.min(root.widgetGaugeDiameter, root.width - 32,
-      root.requestedHeight - (root.compactLayout ? 16 + (root.profilesVisible ? 30 : 0)
-        : 32 + 5 + batteryFont.height + 16 + (root.profilesVisible ? 46 : 10) + (root.profileError ? batteryFont.height + 10 : 0))))
-    : Math.max(60, Math.min(root.widgetGaugeDiameter, root.width - 32))
+    ? Math.min(root.preferredGaugeDiameter,
+      // Leave readable space beside the ring for status and any profile error.
+      root.compactLayout ? Math.max(34, root.width - 104) : root.preferredGaugeDiameter,
+      Math.max(root.compactLayout ? 34 : 60,
+        root.requestedHeight - (root.compactLayout ? root.compactLayoutOverhead : root.fullLayoutOverhead)))
+    : root.preferredGaugeDiameter
 
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
@@ -51,7 +61,7 @@ BorderSurface {
   padding: 16
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(260, root.widgetGaugeDiameter + 48)
-  readonly property real naturalCardHeight: content.implicitHeight + 32
+  readonly property real naturalCardHeight: root.preferredGaugeDiameter + root.fullLayoutOverhead
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
   FontMetrics { id: batteryFont; font.family: Style.font.family; font.pixelSize: 10 }
 
@@ -315,11 +325,13 @@ BorderSurface {
 
     Item {
       width: parent.width
-      height: root.compactLayout ? Math.max(batteryGauge.height, batterySummary.height)
+      height: root.compactLayout ? Math.max(batteryGauge.height,
+        batterySummary.height + (root.profileError ? 2 + compactProfileError.implicitHeight : 0))
         : batteryGauge.height + 10 + batterySummary.height
 
       CircularGauge {
         id: batteryGauge
+        objectName: "batteryChargeGauge"
         x: root.compactLayout ? 0 : (parent.width - width) / 2
         value: root.batteryFraction * 100
         label: "BATTERY"
@@ -335,13 +347,15 @@ BorderSurface {
       }
     Text {
       id: batterySummary
+      objectName: "batteryStatusSummary"
       x: root.compactLayout ? batteryGauge.width + 8 : 0
-      y: root.compactLayout ? (parent.height - height) / 2 : batteryGauge.height + 10
+      y: root.compactLayout ? (parent.height - height
+        - (root.profileError ? 2 + compactProfileError.implicitHeight : 0)) / 2 : batteryGauge.height + 10
       width: root.compactLayout ? parent.width - batteryGauge.width - 8 : parent.width
       height: 16
-      text: root.compactLayout && root.profileError ? root.profileError : root.compactSummary
+      text: root.compactSummary
       textFormat: Text.PlainText
-      color: root.compactLayout && root.profileError ? Color.urgent : Theme.resolveMutedColor(root.textColor)
+      color: Theme.resolveMutedColor(root.textColor)
       font.family: Style.font.family
       font.pixelSize: 11
       minimumPixelSize: 10
@@ -351,12 +365,29 @@ BorderSurface {
       maximumLineCount: 1
       elide: Text.ElideRight
       Accessible.role: Accessible.StaticText
-      Accessible.name: root.profileError || root.compactSummary
+      Accessible.name: root.compactSummary
     }
+      Text {
+        id: compactProfileError
+        objectName: "batteryCompactProfileError"
+        visible: root.compactLayout && root.profileError !== ""
+        x: batterySummary.x
+        y: batterySummary.y + batterySummary.height + 2
+        width: batterySummary.width
+        text: root.profileError
+        textFormat: Text.PlainText
+        color: Color.urgent
+        font.family: Style.font.family
+        font.pixelSize: 10
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
+        Accessible.name: root.profileError
+      }
     }
 
     Row {
       id: profileRow
+      objectName: "batteryProfileControls"
       width: parent.width
       spacing: 6
       anchors.horizontalCenter: parent.horizontalCenter
@@ -430,7 +461,9 @@ BorderSurface {
     }
 
     Text {
-      width: parent.width
+      id: profileErrorText
+      objectName: "batteryProfileError"
+      width: root.width - 24
       visible: root.profileError !== "" && !root.compactLayout
       textFormat: Text.PlainText
       text: root.profileError
@@ -438,7 +471,7 @@ BorderSurface {
       font.family: Style.font.family
       font.pixelSize: 10
       horizontalAlignment: Text.AlignHCenter
-      wrapMode: root.requestedHeight > 0 ? Text.NoWrap : Text.WordWrap
+      wrapMode: Text.WordWrap
       elide: Text.ElideRight
       Accessible.name: root.profileError
     }

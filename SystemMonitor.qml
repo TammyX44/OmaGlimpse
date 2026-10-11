@@ -39,7 +39,10 @@ BorderSurface {
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
-  readonly property bool compactLayout: root.requestedHeight > 0 && root.requestedHeight < 170
+  // Compact only when the preferred rings plus full labels cannot fit. A fixed
+  // height breakpoint made a taller card suddenly halve its ring diameter.
+  readonly property real fullLayoutHeight: root.baseGaugeDiameter + 40 + (root.showGpu ? 78 : 40)
+  readonly property bool compactLayout: root.requestedHeight > 0 && root.requestedHeight < root.fullLayoutHeight
   readonly property int contentPadding: root.compactLayout ? 8 : 20
   readonly property int gaugeSpacing: root.compactLayout ? 8 : 16
   readonly property real minimumCardHeight: root.showGpu ? 110 : 80

@@ -37,19 +37,26 @@ BorderSurface {
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   readonly property real requestedHeight: Sizing.requestedHeight(root.widgetCfg.cardHeight)
   readonly property bool compactNumbers: root.requestedHeight > 0 && root.requestedHeight < 160
-  readonly property bool compactSizing: root.requestedHeight > 0 && root.requestedHeight < 260
+  readonly property bool compactSizing: root.requestedHeight > 0
+    && (root.compactNumbers || root.requestedHeight < root.baseGaugeDiameter + root.fullLayoutOverhead)
   readonly property int contentPadding: root.compactSizing ? 8 : 20
   readonly property real minimumCardHeight: root.showHistory ? 90 : 80
   readonly property real baseGaugeDiameter: {
     if (widgetCardWidth <= 0) return widgetGaugeDiameter
     var avail = widgetCardWidth - 40 - 8
-    return Math.max(40, Math.min(widgetGaugeDiameter, avail / 2))
+    return Math.min(widgetGaugeDiameter, Math.max(40, avail / 2))
   }
+  // Reserve the ring-mode history footprint even while showing numbers, so
+  // revealing the rings at 160px cannot reduce their available diameter.
+  readonly property real fullLayoutOverhead: 40 + interfaceHeader.implicitHeight
+    + (root.showHistory ? 36 : 0) + (root.showHistory ? 2 : 1) * 8
+    + Math.ceil(networkFont.height) + 8 + 4 + Math.ceil(networkFont.height)
+  readonly property real compactLayoutOverhead: 16 + interfaceHeader.implicitHeight
+    + (root.showHistory ? 24 : 0) + (root.showHistory ? 2 : 1) * 4
+    + Math.ceil(networkFont.height) + 3
   readonly property real effectiveGaugeDiameter: root.requestedHeight > 0
-    ? Math.max(40, Math.min(root.baseGaugeDiameter, root.requestedHeight
-      - 2 * root.contentPadding - interfaceHeader.implicitHeight - (root.showHistory ? historyGraph.height : 0)
-      - (root.showHistory ? 3 : 2) * content.spacing - networkFont.height - (root.compactSizing ? 3 : 8)
-      - (root.compactSizing ? 0 : 4 + networkFont.height))) : root.baseGaugeDiameter
+    ? Math.min(root.baseGaugeDiameter, Math.max(40, root.requestedHeight
+      - (root.compactSizing ? root.compactLayoutOverhead : root.fullLayoutOverhead))) : root.baseGaugeDiameter
 
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
@@ -57,7 +64,7 @@ BorderSurface {
   padding: root.contentPadding
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, root.widgetGaugeDiameter * 2 + 48)
-  readonly property real naturalCardHeight: content.implicitHeight + 40
+  readonly property real naturalCardHeight: root.baseGaugeDiameter + root.fullLayoutOverhead
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
   FontMetrics { id: networkFont; font.family: Style.font.family; font.pixelSize: 10 }
 
