@@ -78,6 +78,8 @@ Settings are saved to `~/.config/omarchy/tammy-widgets.json`. This established f
 
 The media card reserves its playback height while idle, so starting a player or receiving a track duration does not expand it over neighboring cards. If an older saved layout already overlaps, reposition the affected cards or apply a layout preset once.
 
+The media card works with apps that expose MPRIS, including supported browsers and audio/video players. Its timeline stays in place even when the player omits timing data: unavailable times show `--:--`, and seeking is disabled until both duration and position are valid. Playback controls remain available for playing or paused sources without track metadata, subject to the player's capabilities and the **Show Controls** preference. Switching players or tracks cancels an unfinished seek rather than applying it to the new source.
+
 Installing the plugin does not overwrite existing preferences. Changes made in the settings panel save to the plugin's own JSON file, and resetting to defaults requires confirmation.
 
 Settings are written atomically after a short debounce. Unchanged startup saves do not block later edits, and normal component shutdown flushes pending edits. This does not guarantee unsaved changes survive a power failure or a forced process kill.

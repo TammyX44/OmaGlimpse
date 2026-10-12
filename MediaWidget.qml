@@ -16,7 +16,7 @@ import "WidgetSizing.js" as Sizing
 //   2. Player with metadata (paused)
 //   3. Any player
 // Proxy players (playerctld) are deprioritized.
-// Browser-proxy players without track titles are skipped.
+// Idle browser-proxy players without track titles are skipped.
 //
 // Position tracking uses a 1-second Timer to interpolate forward
 // while playing, with periodic sync to the real MPRIS position.
@@ -128,17 +128,22 @@ BorderSurface {
     var _ = root.playerUpdateNonce
     var playing = null
     var playingProxy = null
+    var playingWithoutMetadata = null
+    var playingProxyWithoutMetadata = null
     var paused = null
     var pausedProxy = null
+    var pausedWithoutMetadata = null
+    var pausedProxyWithoutMetadata = null
     var any = null
 
     for (var i = 0; i < players.length; i++) {
       var p = players[i]
       if (!p) continue
 
-      // Skip browser-proxy players with no track title
+      // Ignore idle browser proxies, but keep title-less audio/live streams.
       var entry = String(p.desktopEntry || p.identity || "")
-      if (entry.indexOf("plasma-browser") !== -1 && !p.trackTitle) continue
+      if (entry.indexOf("plasma-browser") !== -1 && !p.trackTitle && !p.isPlaying
+          && p.playbackState !== MprisPlaybackState.Paused) continue
 
       var proxy = isProxyPlayer(p)
       var hasMeta = hasTrackMetadata(p)
@@ -146,18 +151,29 @@ BorderSurface {
       if (p.isPlaying && hasMeta) {
         if (!proxy) { playing = p; }
         else if (!playingProxy) { playingProxy = p; }
+      } else if (p.isPlaying) {
+        if (!proxy && !playingWithoutMetadata) playingWithoutMetadata = p
+        else if (proxy && !playingProxyWithoutMetadata) playingProxyWithoutMetadata = p
       } else if (hasMeta) {
         if (!proxy && !paused) { paused = p; }
         else if (proxy && !pausedProxy) { pausedProxy = p; }
+      } else if (p.playbackState === MprisPlaybackState.Paused) {
+        if (!proxy && !pausedWithoutMetadata) pausedWithoutMetadata = p
+        else if (proxy && !pausedProxyWithoutMetadata) pausedProxyWithoutMetadata = p
       } else if (!any) {
         any = p
       }
     }
 
-    return playing || playingProxy || paused || pausedProxy || any || null
+    return playing || playingProxy || playingWithoutMetadata || playingProxyWithoutMetadata
+      || paused || pausedProxy || pausedWithoutMetadata || pausedProxyWithoutMetadata || any || null
   }
 
-  readonly property bool hasMedia: activePlayer !== null && hasTrackMetadata(activePlayer)
+  // A player can clear metadata during a track change or play a live stream
+  // without a title. Keep transport available while playback is active.
+  readonly property bool hasMedia: activePlayer !== null
+    && (hasTrackMetadata(activePlayer) || activePlayer.isPlaying
+      || activePlayer.playbackState === MprisPlaybackState.Paused)
   readonly property string title: activePlayer ? (activePlayer.trackTitle || "Unknown track") : ""
   readonly property string artist: activePlayer ? (activePlayer.trackArtist || "") : ""
   readonly property string album: activePlayer && activePlayer.trackAlbum ? activePlayer.trackAlbum : ""
@@ -237,21 +253,30 @@ BorderSurface {
 
   // ── Position tracking (seconds, not microseconds) ──
 
-  readonly property real trackLength: activePlayer && activePlayer.length ? activePlayer.length : 0
+  readonly property real trackLength: activePlayer && isFinite(Number(activePlayer.length))
+    && Number(activePlayer.length) > 0 ? Number(activePlayer.length) : 0
+  readonly property bool durationAvailable: root.trackLength > 0
+  readonly property bool positionAvailable: !!(root.activePlayer && root.activePlayer.positionSupported
+    && isFinite(Number(root.activePlayer.position)) && Number(root.activePlayer.position) >= 0)
+  readonly property bool timelineAvailable: root.hasMedia
   readonly property bool canSeek: !!(activePlayer && activePlayer.canSeek
-    && activePlayer.positionSupported && trackLength > 0)
+    && root.positionAvailable && root.durationAvailable)
   property real livePosition: 0
   property real positionSampleAt: Date.now()
   property bool seeking: false
   property real seekPreview: 0
   readonly property real shownPosition: seeking ? seekPreview : livePosition
-  readonly property real progress: trackLength > 0 ? Math.max(0, Math.min(1, shownPosition / trackLength)) : 0
+  readonly property real progress: root.durationAvailable && root.positionAvailable
+    ? Math.max(0, Math.min(1, shownPosition / trackLength)) : 0
 
   function syncPosition() {
     root.positionSampleAt = Date.now()
-    if (!root.samplingActive || root.seeking) return
-    root.livePosition = root.activePlayer && root.activePlayer.position >= 0
-      ? root.activePlayer.position : 0
+    if (root.seeking) return
+    // Reading the cached signal value is safe while periodic sampling is
+    // paused, and prevents a previous player's progress surviving a switch.
+    var player = root.activePlayer
+    var position = player ? Number(player.position) : -1
+    root.livePosition = player && player.positionSupported && isFinite(position) && position >= 0 ? position : 0
   }
   onSamplingActiveChanged: {
     root.seeking = false
@@ -268,15 +293,28 @@ BorderSurface {
       root.syncPosition()
     }
     function onTrackTitleChanged() {
+      root.seeking = false
+      root.seekPreview = 0
+      root.syncPosition()
+    }
+    function onPostTrackChanged() {
+      root.seeking = false
+      root.seekPreview = 0
       root.syncPosition()
     }
     function onLengthChanged() {
+      root.syncPosition()
+    }
+    function onPositionSupportedChanged() {
+      root.seeking = false
       root.syncPosition()
     }
   }
 
   // Reset when active player changes
   onActivePlayerChanged: {
+    root.seeking = false
+    root.seekPreview = 0
     root.syncPosition()
   }
 
@@ -291,7 +329,7 @@ BorderSurface {
     objectName: "mediaPositionTimer"
     interval: Sampling.interval(1000, root.samplingMultiplier)
     repeat: true
-    running: root.samplingActive && root.isPlaying && root.trackLength > 0
+    running: root.samplingActive && root.isPlaying && root.durationAvailable && root.positionAvailable && !root.seeking
     onTriggered: {
       var now = Date.now()
       root.livePosition = Math.min(root.trackLength,
@@ -308,7 +346,7 @@ BorderSurface {
     repeat: true
     running: root.samplingActive && root.hasMedia && root.activePlayer !== null
     onTriggered: {
-      if (root.activePlayer && root.activePlayer.position >= 0) {
+      if (root.positionAvailable && !root.seeking) {
         var realPos = root.activePlayer.position
         var diff = Math.abs(realPos - root.livePosition)
         if (diff > 3) {
@@ -355,6 +393,12 @@ BorderSurface {
 
   function commitSeek() {
     if (!root.seeking) return
+    if (!root.canSeek) {
+      root.seeking = false
+      root.seekPreview = 0
+      root.syncPosition()
+      return
+    }
     var newPos = root.seekPreview
     root.seeking = false
     root.livePosition = newPos
@@ -520,14 +564,18 @@ BorderSurface {
       }
     }
 
-    // --- Seekable progress bar ---
+    // --- Stable timeline; timing and seeking depend on player capabilities ---
     Item {
       id: seekRow
       objectName: "mediaSeekRow"
       width: parent.width
       height: root.seekRowHeight
       y: trackInfo.height + root.layoutSpacing
-      visible: root.hasMedia && root.trackLength > 0
+      visible: root.timelineAvailable
+      Accessible.role: Accessible.StaticText
+      Accessible.name: "Playback timeline"
+      Accessible.description: !root.durationAvailable ? "Track duration unavailable from this player"
+        : !root.positionAvailable ? "Playback position unavailable from this player" : ""
 
       MouseArea {
         id: seekArea
@@ -559,7 +607,7 @@ BorderSurface {
         width: root.compactLayout ? parent.width - x - durationTime.width - 6 : parent.width
         height: 5
         radius: 2.5
-        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.1)
+        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.2)
       }
 
       Rectangle {
@@ -580,14 +628,14 @@ BorderSurface {
         // Clamp the thumb inside the track at both ends, including tiny cards.
         y: progressTrack.y - 2.5
         x: progressTrack.x + Math.max(0, Math.min(progressTrack.width - width, progressTrack.width * root.progress - 5))
-        visible: seekArea.containsMouse || seekArea.pressed
+        visible: root.canSeek && (seekArea.containsMouse || seekArea.pressed)
       }
 
       Text {
         id: elapsedTime
         objectName: "mediaElapsedTime"
         textFormat: Text.PlainText
-        text: root.formatTime(root.shownPosition)
+        text: root.positionAvailable ? root.formatTime(root.shownPosition) : "--:--"
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
         font.family: Style.font.family
         font.pixelSize: 10
@@ -603,7 +651,7 @@ BorderSurface {
         id: durationTime
         objectName: "mediaDurationTime"
         textFormat: Text.PlainText
-        text: root.formatTime(root.trackLength)
+        text: root.durationAvailable ? root.formatTime(root.trackLength) : "--:--"
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
         font.family: Style.font.family
         font.pixelSize: 10
@@ -624,7 +672,7 @@ BorderSurface {
       spacing: root.transportSpacing
       x: root.inlineControls ? parent.width - width : (parent.width - width) / 2
       y: root.inlineControls ? (trackInfo.height - height) / 2
-        : trackInfo.height + root.layoutSpacing + (seekRow.visible ? seekRow.height + root.layoutSpacing : 0)
+        : trackInfo.height + root.layoutSpacing + seekRow.height + root.layoutSpacing
       visible: root.showControls && root.hasMedia
       height: root.transportButtonSize
 
