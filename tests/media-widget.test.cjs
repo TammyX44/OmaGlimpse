@@ -5,6 +5,8 @@ const path = require('node:path')
 const vm = require('node:vm')
 
 const source = fs.readFileSync(path.join(__dirname, '../MediaWidget.qml'), 'utf8')
+// Quickshell's MprisPlaybackState Enum is ordered Stopped, Playing, Paused.
+const MprisPlaybackState = { Stopped: 0, Playing: 1, Paused: 2 }
 
 function extractFunction(name) {
   const start = source.indexOf(`  function ${name}(`)
@@ -37,6 +39,13 @@ function fakePlayer(overrides = {}) {
   return {
     calls,
     isPlaying: false,
+    playbackState: MprisPlaybackState.Paused,
+    trackTitle: 'Fixture track',
+    trackArtist: 'Fixture artist',
+    length: 180,
+    position: 55,
+    positionSupported: true,
+    canSeek: true,
     canPlay: false,
     canPause: false,
     canTogglePlaying: false,
@@ -158,6 +167,225 @@ test('an absent MPRIS player has a stable empty artwork key', () => {
   assert.equal(context.playerKey({ dbusName: 'org.mpris.MediaPlayer2.demo' }), 'org.mpris.MediaPlayer2.demo')
 })
 
+// Read the state bindings and handlers from QML so timing assertions exercise
+// production logic, including any helpers added to reset a player switch.
+function timingState(activePlayer, overrides = {}) {
+  const scope = { Date, MprisPlaybackState, root: { activePlayer, samplingEnabled: true, visible: true,
+    livePosition: 55, positionSampleAt: 0, seeking: false, seekPreview: 0, ...overrides } }
+  vm.createContext(scope)
+  for (const match of source.matchAll(/^  function (\w+)\(/gm)) {
+    vm.runInContext(extractFunction(match[1]), scope)
+    scope.root[match[1]] = scope[match[1]]
+  }
+  for (const name of ['samplingActive', 'hasMedia', 'isPlaying', 'trackLength',
+    'durationAvailable', 'positionAvailable', 'timelineAvailable', 'canSeek', 'shownPosition', 'progress']) {
+    const declaration = source.match(new RegExp(`^  readonly property \\w+ ${name}: ([^\\n]+(?:\\n {4,}[^\\n]+)*)`, 'm'))
+    assert.ok(declaration, `missing ${name} timing contract`)
+    const expression = declaration[1].trim()
+    Object.defineProperty(scope.root, name, { configurable: true, get() {
+      return vm.runInContext(expression.startsWith('{')
+        ? `(function() ${expression})()` : `(${expression})`, scope)
+    } })
+  }
+  // QML permits unqualified root properties inside functions and bindings.
+  for (const name of Object.getOwnPropertyNames(scope.root)) {
+    Object.defineProperty(scope, name, { configurable: true,
+      get: () => scope.root[name], set: value => { scope.root[name] = value } })
+  }
+  return { root: scope.root, evaluate: expression => vm.runInContext(`(${expression})`, scope),
+    switchPlayer(player) {
+      scope.root.activePlayer = player
+      const marker = source.indexOf('  onActivePlayerChanged:')
+      assert.notEqual(marker, -1, 'missing active-player reset handler')
+      const start = source.indexOf('{', marker)
+      let depth = 0
+      for (let i = start; i < source.length; i++) {
+        if (source[i] === '{') depth++
+        else if (source[i] === '}' && --depth === 0) {
+          vm.runInContext(source.slice(start + 1, i), scope)
+          return
+        }
+      }
+      assert.fail('unterminated active-player reset handler')
+    } }
+}
+
+function timeLabel(state, name) {
+  return state.evaluate(layoutExpression(`objectName: "${name}"`, 'text', 8))
+}
+
+test('unknown duration retains a visible timeline with unavailable time placeholders', () => {
+  const state = timingState(fakePlayer({ isPlaying: true, length: 0, positionSupported: false, position: -1 }))
+  assert.equal(state.root.durationAvailable, false)
+  assert.equal(state.root.positionAvailable, false)
+  assert.equal(state.root.timelineAvailable, true)
+  assert.equal(state.evaluate(layoutExpression('id: seekRow', 'visible', 6)), true)
+  assert.equal(timeLabel(state, 'mediaElapsedTime'), '--:--')
+  assert.equal(timeLabel(state, 'mediaDurationTime'), '--:--')
+  assert.equal(state.root.progress, 0)
+  assert.equal(state.root.canSeek, false)
+  const knownPosition = timingState(fakePlayer({ length: 0, position: 55 }))
+  assert.equal(knownPosition.root.positionAvailable, true)
+  assert.equal(timeLabel(knownPosition, 'mediaElapsedTime'), '0:55')
+  assert.equal(timeLabel(knownPosition, 'mediaDurationTime'), '--:--')
+  assert.equal(knownPosition.root.progress, 0)
+  assert.equal(knownPosition.root.canSeek, false)
+})
+
+test('only finite positive duration and finite supported nonnegative position are available', () => {
+  for (const length of [0, -1, NaN, Infinity, -Infinity]) {
+    const state = timingState(fakePlayer({ length }))
+    assert.equal(state.root.trackLength, 0, `invalid duration ${length}`)
+    assert.equal(state.root.durationAvailable, false)
+    assert.equal(timeLabel(state, 'mediaDurationTime'), '--:--')
+    assert.equal(state.root.canSeek, false)
+    assert.equal(state.root.progress, 0)
+  }
+  for (const position of [-1, NaN, Infinity, -Infinity]) {
+    const state = timingState(fakePlayer({ position }), { livePosition: position })
+    assert.equal(state.root.positionAvailable, false, `invalid position ${position}`)
+    assert.equal(timeLabel(state, 'mediaElapsedTime'), '--:--')
+    assert.equal(state.root.canSeek, false)
+    assert.equal(state.root.progress, 0)
+  }
+  const zero = timingState(fakePlayer({ position: 0 }), { livePosition: 0 })
+  assert.equal(zero.root.positionAvailable, true)
+  assert.equal(timeLabel(zero, 'mediaElapsedTime'), '0:00')
+  for (const position of [180, 200]) {
+    const state = timingState(fakePlayer({ position }), { livePosition: position })
+    assert.equal(state.root.progress, 1, 'progress must stop at the end of the bar')
+  }
+})
+
+test('active playback without track metadata retains timeline and transport', () => {
+  const state = timingState(fakePlayer({ isPlaying: true, trackTitle: '', trackArtist: '', length: 0,
+    positionSupported: false, position: -1 }), { showControls: true })
+  assert.equal(state.root.hasMedia, true)
+  assert.equal(state.root.timelineAvailable, true)
+  assert.equal(state.evaluate(layoutExpression('id: transportRow', 'visible', 6)), true)
+  assert.equal(state.root.canRunAction('playPause', state.root.activePlayer), false)
+  state.root.activePlayer.canPause = true
+  assert.equal(state.root.runAction('playPause'), true)
+  assert.deepEqual(state.root.activePlayer.calls, ['pause'])
+})
+
+test('paused playback without metadata retains timeline and playable transport', () => {
+  const state = timingState(fakePlayer({ isPlaying: false, playbackState: MprisPlaybackState.Paused,
+    trackTitle: '', trackArtist: '', length: 0, positionSupported: false, position: -1, canPlay: true }),
+  { showControls: true })
+  assert.equal(state.root.hasMedia, true)
+  assert.equal(state.root.timelineAvailable, true)
+  assert.equal(state.evaluate(layoutExpression('id: transportRow', 'visible', 6)), true)
+  assert.equal(timeLabel(state, 'mediaElapsedTime'), '--:--')
+  assert.equal(timeLabel(state, 'mediaDurationTime'), '--:--')
+  assert.equal(state.root.runAction('playPause'), true)
+  assert.deepEqual(state.root.activePlayer.calls, ['play'])
+})
+
+test('playing without metadata wins over paused metadata in the actual player-selection binding', () => {
+  const marker = source.indexOf('  readonly property var activePlayer:')
+  assert.notEqual(marker, -1)
+  const start = source.indexOf('{', marker)
+  let depth = 0
+  let body
+  for (let i = start; i < source.length; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}' && --depth === 0) {
+      body = source.slice(start + 1, i)
+      break
+    }
+  }
+  assert.ok(body, 'missing selection binding body')
+  const paused = fakePlayer({ dbusName: 'org.mpris.MediaPlayer2.paused' })
+  const playing = fakePlayer({ dbusName: 'org.mpris.MediaPlayer2.stream', isPlaying: true,
+    trackTitle: '', trackArtist: '', length: 0 })
+  function select(players) {
+    const scope = { players, MprisPlaybackState, root: { players, playerUpdateNonce: 0 } }
+    vm.createContext(scope)
+    vm.runInContext(extractFunction('isProxyPlayer') + '\n' + extractFunction('hasTrackMetadata'), scope)
+    scope.root.isProxyPlayer = scope.isProxyPlayer
+    scope.root.hasTrackMetadata = scope.hasTrackMetadata
+    return vm.runInContext(`(function() { ${body} })()`, scope)
+  }
+  for (const players of [[paused, playing], [playing, paused]]) assert.equal(select(players), playing)
+  const proxy = fakePlayer({ dbusName: 'org.mpris.MediaPlayer2.playerctld', desktopEntry: 'playerctld',
+    isPlaying: true, trackTitle: '', trackArtist: '' })
+  assert.equal(select([paused, proxy]), proxy)
+  assert.equal(select([proxy, playing, paused]), playing, 'regular active player precedes its proxy')
+  const browser = fakePlayer({ desktopEntry: 'plasma-browser-integration', isPlaying: true,
+    trackTitle: '', trackArtist: '' })
+  assert.equal(select([paused, browser]), browser, 'active browser survives transient missing metadata')
+  browser.isPlaying = false
+  assert.equal(select([browser, paused]), paused, 'inactive empty browser proxy remains excluded')
+  const idle = fakePlayer({ dbusName: 'org.mpris.MediaPlayer2.idle', trackTitle: '', trackArtist: '',
+    playbackState: MprisPlaybackState.Stopped })
+  const pausedStream = fakePlayer({ dbusName: 'org.mpris.MediaPlayer2.pausedStream',
+    trackTitle: '', trackArtist: '', playbackState: MprisPlaybackState.Paused })
+  assert.equal(select([idle, pausedStream]), pausedStream, 'paused stream stays available over an idle source')
+  browser.playbackState = MprisPlaybackState.Paused
+  assert.equal(select([idle, browser]), browser, 'paused browser without metadata keeps its resume controls')
+  assert.equal(select([pausedStream, paused]), paused, 'paused source with metadata still has priority')
+})
+
+test('known timing shows real values even when seeking is unsupported', () => {
+  for (const canSeek of [true, false]) {
+    const state = timingState(fakePlayer({ canSeek }))
+    assert.equal(state.root.durationAvailable, true)
+    assert.equal(state.root.positionAvailable, true)
+    assert.equal(state.root.timelineAvailable, true)
+    assert.equal(timeLabel(state, 'mediaElapsedTime'), '0:55')
+    assert.equal(timeLabel(state, 'mediaDurationTime'), '3:00')
+    assert.equal(state.root.progress, 55 / 180)
+    assert.equal(state.root.canSeek, canSeek)
+    state.root.previewSeek(0.75)
+    state.root.commitSeek()
+    assert.equal(state.root.activePlayer.position, canSeek ? 135 : 55)
+    assert.equal(state.root.seeking, false)
+  }
+  const unavailable = timingState(fakePlayer({ positionSupported: false }))
+  assert.equal(timeLabel(unavailable, 'mediaElapsedTime'), '--:--')
+  assert.equal(timeLabel(unavailable, 'mediaDurationTime'), '3:00')
+  assert.equal(unavailable.root.canSeek, false)
+  assert.equal(unavailable.root.progress, 0)
+})
+
+test('switching players clears an in-flight seek and samples the new player', () => {
+  for (const samplingEnabled of [true, false]) {
+    const old = fakePlayer()
+    const state = timingState(old, { samplingEnabled, livePosition: 120, seeking: true, seekPreview: 160 })
+    const next = fakePlayer({ position: 12 })
+    state.switchPlayer(next)
+    assert.equal(state.root.seeking, false, 'old drag must not survive a player switch')
+    assert.equal(state.root.seekPreview, 0, 'old seek preview must be cleared')
+    assert.equal(state.root.livePosition, 12, 'switch must sample even while periodic sampling is disabled')
+    assert.equal(state.root.shownPosition, 12)
+    assert.equal(state.root.progress, 12 / 180)
+    state.root.commitSeek()
+    assert.equal(next.position, 12, 'releasing an old drag must not seek the new player')
+    assert.equal(old.position, 55)
+    state.switchPlayer(fakePlayer({ length: 0, position: -1, positionSupported: false }))
+    assert.equal(state.root.livePosition, 0)
+    assert.equal(state.root.progress, 0)
+    assert.equal(timeLabel(state, 'mediaElapsedTime'), '--:--')
+    state.switchPlayer(null)
+    assert.equal(state.root.livePosition, 0)
+    assert.equal(state.root.seeking, false)
+    assert.equal(state.root.timelineAvailable, false)
+  }
+})
+
+test('commit rejects a drag after timing or seek capability disappears', () => {
+  for (const replacement of [null, fakePlayer({ canSeek: false }),
+    fakePlayer({ positionSupported: false }), fakePlayer({ length: 0 })]) {
+    const state = timingState(fakePlayer(), { seeking: true, seekPreview: 135 })
+    state.root.activePlayer = replacement
+    assert.doesNotThrow(() => state.root.commitSeek())
+    assert.equal(state.root.seeking, false)
+    if (replacement) assert.equal(replacement.position, 55, 'unsupported player must not receive the old seek')
+    assert.notEqual(state.root.livePosition, 135, 'rejected seek must not change cached progress')
+  }
+})
+
 function layoutExpression(marker, property, indent) {
   const start = source.indexOf(marker)
   assert.notEqual(start, -1, `missing ${marker}`)
@@ -173,7 +401,8 @@ function layoutExpression(marker, property, indent) {
 const compiledExpressions = new Map()
 function mediaLayout(showControls = true, showAlbumArt = true) {
   const layout = {
-    root: { showControls, showAlbumArt, width: 340, hasMedia: false, trackLength: 0, widgetCfg: { cardHeight: 0 } },
+    root: { showControls, showAlbumArt, width: 340, hasMedia: false, timelineAvailable: false,
+      durationAvailable: false, positionAvailable: false, trackLength: 0, widgetCfg: { cardHeight: 0 } },
     Sizing: require('../WidgetSizing.js'),
     content: { anchors: {} }, trackInfo: {}, seekRow: {}, transportRow: {}, artBox: {}, metadata: {}
   }
@@ -228,11 +457,13 @@ function mediaLayout(showControls = true, showAlbumArt = true) {
 }
 
 const mediaStates = [
-  { name: 'idle', hasMedia: false, trackLength: 0, isPlaying: false },
-  { name: 'metadata without duration', hasMedia: true, trackLength: 0, isPlaying: false },
-  { name: 'playing seekable track', hasMedia: true, trackLength: 180, isPlaying: true },
-  { name: 'paused seekable track', hasMedia: true, trackLength: 180, isPlaying: false },
-  { name: 'stopped', hasMedia: false, trackLength: 0, isPlaying: false }
+  { name: 'idle', hasMedia: false, timelineAvailable: false, trackLength: 0, isPlaying: false },
+  { name: 'metadata without duration', hasMedia: true, timelineAvailable: true, trackLength: 0, isPlaying: false },
+  { name: 'playing without metadata', hasMedia: true, timelineAvailable: true, trackLength: 0, isPlaying: true },
+  { name: 'paused without metadata', hasMedia: true, timelineAvailable: true, trackLength: 0, isPlaying: false },
+  { name: 'playing seekable track', hasMedia: true, timelineAvailable: true, trackLength: 180, isPlaying: true },
+  { name: 'paused seekable track', hasMedia: true, timelineAvailable: true, trackLength: 180, isPlaying: false },
+  { name: 'stopped', hasMedia: false, timelineAvailable: false, trackLength: 0, isPlaying: false }
 ]
 
 for (const showControls of [true, false]) {
@@ -289,6 +520,7 @@ for (const showControls of [true, false]) {
               assert.ok(contentY + seekRow.y + seekRow.height <= root.height, `${label}: seek clipped`)
               assert.ok(seekRow.width * 0.56 - 12 >= 80, `${label}: seek track too narrow`)
             }
+            assert.equal(seekRow.visible, state.timelineAvailable, `${label}: timeline silently hidden`)
             assert.equal(transportRow.visible, showControls, `${label}: controls silently hidden`)
             if (showControls) {
               assert.ok(root.transportButtonSize >= 28, label)
