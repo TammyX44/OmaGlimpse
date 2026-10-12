@@ -77,12 +77,12 @@ Column {
     width: parent.width; height: 36; radius: 6
     color: Color.background
     border.width: 1; border.color: nameInput.activeFocus ? Color.accent : Color.popups.border
-    TextInput {
+    SafeTextField {
       id: nameInput
       objectName: "layoutNameInput"
       anchors.fill: parent; anchors.margins: 9
       color: Color.foreground; font.family: Style.font.family; font.pixelSize: 12
-      maximumLength: 48; selectByMouse: true; clip: true
+      maximumLength: 48; selectByMouse: true; clip: true; framed: false
       Accessible.name: "New layout name"
       onTextChanged: editor.armedAction = ""
       Text { anchors.fill: parent; visible: !nameInput.text; text: "e.g. Work or Gaming"; color: Color.foreground; opacity: 0.65; font: nameInput.font }

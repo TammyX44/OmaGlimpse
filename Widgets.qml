@@ -200,6 +200,10 @@ PanelWindow {
 
   // Settings panel state
   property bool settingsVisible: false
+  property var settingsPanel: null
+  property var settingsExpandedWidgets: ({})
+  property string pendingSettingsWidgetId: ""
+  onSettingsVisibleChanged: root.syncSettingsPanel()
 
   // Edit mode: when true, cards show a highlight border.
   // Dragging works regardless of edit mode.
@@ -434,6 +438,8 @@ PanelWindow {
     watchChanges: true
     printErrors: false
     atomicWrites: true
+    // Normal saves remain asynchronous; only teardown waits for durability.
+    blockWrites: root.finalizing
     onLoaded: root.loadConfig(text())
     onFileChanged: reload()
     onLoadFailed: function(error) {
@@ -524,6 +530,7 @@ PanelWindow {
   // but only writes to disk after 500ms of no changes. This prevents
   // excessive disk I/O when dragging sliders in the settings panel.
   property var pendingConfig: null
+  property bool finalizing: false
   function saveConfig() {
     if (root.activeLayoutKey && root.currentLayoutKey === root.activeLayoutKey) {
       root.config = Profiles.remember(root.config, root.activeLayoutKey)
@@ -539,17 +546,34 @@ PanelWindow {
     id: saveDebounceTimer
     interval: 500
     repeat: false
-    onTriggered: {
-      if (root.persistenceBlocked || root.externalConflict || root.inFlightText) return
-      if (root.pendingConfig) {
-        root.inFlightText = JSON.stringify(root.pendingConfig, null, 2) + "\n"
-        root.pendingConfig = null
-        root.suppressFileWatch = true
-        configFile.setText(root.inFlightText)
-      }
-      // Re-enable watcher after the write settles
-      saveWatchTimer.restart()
+    onTriggered: root.flushConfig()
+  }
+
+  function flushConfig() {
+    if (!root.configLoaded || root.persistenceBlocked || root.externalConflict || root.inFlightText
+        || !root.pendingConfig) return
+    var encoded = JSON.stringify(root.pendingConfig, null, 2) + "\n"
+    root.pendingConfig = null
+    // FileView skips identical content without emitting saved(). Never mark
+    // that no-op in flight: otherwise every subsequent edit stays in memory.
+    if (encoded === root.lastSavedText) {
+      root.suppressFileWatch = false
+      root.saveStatus = "Saved"
+      return
     }
+    root.inFlightText = encoded
+    root.suppressFileWatch = true
+    configFile.setText(encoded)
+    saveWatchTimer.restart()
+  }
+
+  function finishPendingSave() {
+    root.finalizing = true
+    saveDebounceTimer.stop()
+    // Finish an older asynchronous write before writing the newest snapshot.
+    if (root.inFlightText) configFile.waitForJob()
+    root.flushConfig()
+    if (root.inFlightText) configFile.waitForJob()
   }
 
   Timer {
@@ -663,6 +687,30 @@ PanelWindow {
 
   function showSettings() {
     root.settingsVisible = true
+  }
+
+  function syncSettingsPanel() {
+    if (root.settingsVisible) {
+      if (!root.settingsPanel) {
+        root.settingsPanel = settingsPanelComponent.createObject(root,
+          {expandedWidgets: root.shallowClone(root.settingsExpandedWidgets)})
+      }
+      if (!root.settingsPanel) {
+        root.settingsVisible = false
+        console.error("Could not create widget settings panel")
+        return
+      }
+      if (root.pendingSettingsWidgetId) {
+        root.settingsPanel.showWidgetSettings(root.pendingSettingsWidgetId)
+        root.pendingSettingsWidgetId = ""
+      }
+    } else if (root.settingsPanel) {
+      var panel = root.settingsPanel
+      root.settingsExpandedWidgets = root.shallowClone(panel.expandedWidgets)
+      root.settingsPanel = null
+      panel.visible = false
+      panel.destroy()
+    }
   }
 
   function hideSettings() {
@@ -1081,10 +1129,9 @@ PanelWindow {
       root.settingsVisible = true
     }
     function openWidgetSettings(widgetId: string): void {
+      root.pendingSettingsWidgetId = widgetId
       root.settingsVisible = true
-      Qt.callLater(function() {
-        settingsPanel.showWidgetSettings(widgetId)
-      })
+      root.syncSettingsPanel()
     }
     function closeSettings(): void {
       root.settingsVisible = false
@@ -1099,9 +1146,22 @@ PanelWindow {
     function rescan(): void {
       configFile.reload()
     }
+    function status(): string {
+      var cards = []
+      root.allEnabledIds.forEach(function(id) {
+        var item = root.cardItemFor(id)
+        if (item) cards.push({id:id, x:item.x, y:item.y, width:item.width, height:item.height, visible:item.visible})
+      })
+      return JSON.stringify({configLoaded:root.configLoaded, saving:!!root.inFlightText,
+        pending:!!root.pendingConfig, persistenceBlocked:root.persistenceBlocked,
+        externalConflict:root.externalConflict, saveStatus:root.saveStatus, configError:root.configError,
+        settingsLoaded:!!root.settingsPanel,
+        activeLayoutKey:root.activeLayoutKey, currentLayoutKey:root.currentLayoutKey, cards:cards})
+    }
   }
 
   Component.onCompleted: configFile.reload()
+  Component.onDestruction: root.finishPendingSave()
 
   // Push config + visual props into a loaded widget item.
   // Called on initial load and again on every configChanged.
@@ -1610,41 +1670,42 @@ PanelWindow {
   }
 
   // --- Settings panel ---
-  // PanelWindow components can't be reliably loaded inside a Loader
-  // (they may not create a separate Wayland surface). Instead, always
-  // load it and control visibility via the `visible` property.
-  SettingsPanel {
-    id: settingsPanel
-    screen: root.screen
-    displayInventory: root.displayInventory
-    selectedDisplay: root.selectedDisplay
-    undoAvailable: root.undoStack.length > 0 && !root.layoutSwitchPending
-    layoutStatus: root.layoutStatus
-    layoutBusy: root.layoutSwitchPending
-    cardMetrics: root.cardMetrics
-    onDisplaySelected: function(name) { root.selectDisplay(name) }
-    onEditorChanged: function(key, value) { root.updateEditor(key, value) }
-    onUndoRequested: root.undoLayout()
-    onNamedLayoutRequested: function(name, action) { root.namedLayout(name, action) }
-    gpuDevices: gpuMonitor.inventory
-    configError: root.configError
-    layoutWarning: root.layoutWarning
-    saveStatus: root.saveStatus
-    externalConflict: root.externalConflict
-    onRetrySaveRequested: root.retryConfigSave()
-    onResolveConflictRequested: function(keepLocal) { root.resolveConfigConflict(keepLocal) }
-    config: root.config
-    editMode: root.editMode
-    visible: root.settingsVisible
+  // Create the real PanelWindow only when opened, rather than putting it in
+  // an Item Loader or leaving editable controls alive on the hidden desktop.
+  Component {
+    id: settingsPanelComponent
+    SettingsPanel {
+      screen: root.screen
+      displayInventory: root.displayInventory
+      selectedDisplay: root.selectedDisplay
+      undoAvailable: root.undoStack.length > 0 && !root.layoutSwitchPending
+      layoutStatus: root.layoutStatus
+      layoutBusy: root.layoutSwitchPending
+      cardMetrics: root.cardMetrics
+      onDisplaySelected: function(name) { root.selectDisplay(name) }
+      onEditorChanged: function(key, value) { root.updateEditor(key, value) }
+      onUndoRequested: root.undoLayout()
+      onNamedLayoutRequested: function(name, action) { root.namedLayout(name, action) }
+      gpuDevices: gpuMonitor.inventory
+      configError: root.configError
+      layoutWarning: root.layoutWarning
+      saveStatus: root.saveStatus
+      externalConflict: root.externalConflict
+      onRetrySaveRequested: root.retryConfigSave()
+      onResolveConflictRequested: function(keepLocal) { root.resolveConfigConflict(keepLocal) }
+      config: root.config
+      editMode: root.editMode
+      visible: root.settingsVisible
 
-    onWidgetConfigChanged: function(widgetId, key, value) { root.updateWidgetConfig(widgetId, key, value) }
-    onGlobalConfigChanged: root.updateGlobalConfig(key, value)
-    onColorConfigChanged: root.updateColorConfig(key, value)
-    onResetRequested: root.resetConfig()
-    onResetPositionsRequested: root.resetAllPositions()
-    onEditModeToggleRequested: root.toggleEditMode()
-    onPresetRequested: root.applyPreset(preset)
-    onCloseRequested: root.hideSettings()
+      onWidgetConfigChanged: function(widgetId, key, value) { root.updateWidgetConfig(widgetId, key, value) }
+      onGlobalConfigChanged: root.updateGlobalConfig(key, value)
+      onColorConfigChanged: root.updateColorConfig(key, value)
+      onResetRequested: root.resetConfig()
+      onResetPositionsRequested: root.resetAllPositions()
+      onEditModeToggleRequested: root.toggleEditMode()
+      onPresetRequested: root.applyPreset(preset)
+      onCloseRequested: root.hideSettings()
+    }
   }
 
   // Live-update the context menu's editMode when it changes
@@ -1660,8 +1721,10 @@ PanelWindow {
   Connections {
     target: root
     function onWidgetConfigRefresh() {
-      settingsPanel.config = root.config
-      settingsPanel.editMode = root.editMode
+      if (root.settingsPanel) {
+        root.settingsPanel.config = root.config
+        root.settingsPanel.editMode = root.editMode
+      }
     }
   }
 }

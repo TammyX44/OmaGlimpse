@@ -143,6 +143,23 @@ ShellRoot {
         next = Profiles.remember(next, smallKey)
         compare(Profiles.switchProfile(next, smallKey, oldKey).widgets.battery.x, 1600)
       }
+      function test_g_settings_only_exist_while_open_and_preserve_expansion() {
+        compare(desktop.settingsPanel, null)
+        desktop.showSettings()
+        verify(desktop.settingsPanel !== null)
+        compare(desktop.settingsPanel.visible, true)
+        desktop.settingsPanel.showWidgetSettings("networkSpeed")
+        compare(desktop.settingsPanel.isExpanded("networkSpeed"), true)
+        desktop.hideSettings()
+        compare(desktop.settingsPanel, null)
+        wait(50)
+        desktop.showSettings()
+        verify(desktop.settingsPanel !== null)
+        compare(desktop.settingsPanel.isExpanded("networkSpeed"), true)
+        desktop.settingsPanel.closeRequested()
+        compare(desktop.settingsPanel, null)
+        wait(50)
+      }
       function test_z_capture_safe_fixture() {
         if (!Quickshell.env("LAYOUT_TEST_IMAGE")) return
         network.sampleReady = true

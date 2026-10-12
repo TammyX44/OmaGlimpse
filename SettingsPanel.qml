@@ -835,9 +835,10 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
               }
 
-              TextField {
+              SafeTextField {
                 width: 160
                 height: 36
+                maximumLength: 9
                 text: (panel.config.colors && panel.config.colors.accent) || ""
                 placeholderText: "#7aa2f7"
                 Accessible.name: "Accent color"
@@ -872,10 +873,11 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
               }
 
-              TextField {
+              SafeTextField {
                 width: 160
                 height: 36
                 text: (panel.config.colors && panel.config.colors.cardBackground) || ""
+                maximumLength: 9
                 placeholderText: "#1a1b26"
                 Accessible.name: "Card background color"
                 onEditingFinished: panel.commitColorField(text, "cardBackground", "Card background")
@@ -909,10 +911,11 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
               }
 
-              TextField {
+              SafeTextField {
                 width: 160
                 height: 36
                 text: (panel.config.colors && panel.config.colors.textColor) || ""
+                maximumLength: 9
                 placeholderText: "#a9b1d6"
                 Accessible.name: "Widget text color"
                 onEditingFinished: panel.commitColorField(text, "textColor", "Text color")
@@ -947,10 +950,11 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
               }
 
-              TextField {
+              SafeTextField {
                 width: 160
                 height: 36
                 text: (panel.config.colors && panel.config.colors.borderColor) || ""
+                maximumLength: 9
                 placeholderText: "#ffffff"
                 Accessible.name: "Widget border color"
                 onEditingFinished: panel.commitColorField(text, "borderColor", "Border color")
@@ -1180,18 +1184,20 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                       }
 
-                      TextField {
+                      SafeTextField {
+                        objectName: widgetSection.wid + "PositionX"
                         width: 78
                         height: 28
                         font.pixelSize: 11
                         verticalAlignment: TextInput.AlignVCenter
                         text: panel.coordinateText(widgetSection.wid, "x")
                         placeholderText: "Auto"
+                        Accessible.name: Config.widgetDisplayName(widgetSection.wid) + " X position"
                         horizontalAlignment: Text.AlignHCenter
                         anchors.verticalCenter: parent.verticalCenter
                         selectByMouse: true
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        validator: IntValidator { bottom: 0; top: 99999 }
+                        maximumLength: 5
+                        allowedPattern: /^[0-9]*$/
                         onEditingFinished: panel.commitCoordinate(this, widgetSection.wid, "x")
                       }
                     }
@@ -1211,18 +1217,20 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                       }
 
-                      TextField {
+                      SafeTextField {
+                        objectName: widgetSection.wid + "PositionY"
                         width: 78
                         height: 28
                         font.pixelSize: 11
                         verticalAlignment: TextInput.AlignVCenter
                         text: panel.coordinateText(widgetSection.wid, "y")
                         placeholderText: "Auto"
+                        Accessible.name: Config.widgetDisplayName(widgetSection.wid) + " Y position"
                         horizontalAlignment: Text.AlignHCenter
                         anchors.verticalCenter: parent.verticalCenter
                         selectByMouse: true
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        validator: IntValidator { bottom: 0; top: 99999 }
+                        maximumLength: 5
+                        allowedPattern: /^[0-9]*$/
                         onEditingFinished: panel.commitCoordinate(this, widgetSection.wid, "y")
                       }
                     }
@@ -1646,7 +1654,7 @@ PanelWindow {
                         font.pixelSize: 10
                         topPadding: 6
                       }
-                      TextField {
+                      SafeTextField {
                         objectName: "gpuAlias-" + modelData.id
                         width: parent.width
                         height: 30
@@ -1856,14 +1864,14 @@ PanelWindow {
                     width: parent.width; height: 34; radius: 6
                     visible: widgetSection.wcfg.scaleMode === "fixed"
                     color: panel.cardColor; border.width: 1; border.color: scaleInput.activeFocus ? panel.accentColor : panel.borderColor
-                    TextInput {
+                    SafeTextField {
                       id: scaleInput
                       anchors.fill: parent; anchors.margins: 8
                       text: String(widgetSection.wcfg.scaleLimitMbps || 5)
                       color: panel.textColor; font.family: Style.font.family; font.pixelSize: 12
-                      selectByMouse: true; clip: true; maximumLength: 10
+                      selectByMouse: true; clip: true; maximumLength: 10; framed: false
                       Accessible.name: "Network gauge limit in megabytes per second"
-                      validator: DoubleValidator { bottom: 0.01; top: 100000; decimals: 2; locale: "C" }
+                      allowedPattern: /^[0-9]{0,6}(\.[0-9]{0,2})?$/
                       onEditingFinished: {
                         var n = Number(text)
                         if (isFinite(n) && n >= 0.01 && n <= 100000) panel.widgetConfigChanged(widgetSection.wid, "scaleLimitMbps", n)

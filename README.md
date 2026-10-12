@@ -37,6 +37,7 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 | `SettingsPanel.qml`, `WidgetDropdown.qml`, `WidgetContextMenu.qml`, `SettingsButton.qml` | Provide the settings panel, per-card controls, context menu, and bar button. |
 | `WidgetConfig.js`, `WidgetModel.js`, `WidgetTheme.js`, `CircularGauge.qml`, `CompactToggle.qml` | Validate preferences, parse readings, follow theme colors, and share UI controls. |
 | `ArtworkPlaceholder.qml`, `fetch_album_art.py` | Draw a theme-matched media placeholder and safely fetch bounded remote cover images. |
+| `SafeTextField.qml`, `bounded-clipboard.py` | Keep native clipboard probing disabled and handle explicit text pastes through a byte- and time-limited helper. |
 | `SamplingPolicy.qml`, `SamplingModel.js` | Coordinate lock, display power and power-saver sampling across the cards. |
 | `LayoutProfiles.js`, `WidgetLayout.js`, `LayoutEditorControls.qml` | Remember monitor and named layouts, snap cards, and provide the layout editor. |
 | `WidgetSizing.js`, `WidgetSizeControls.qml` | Size cards without cropping their content and provide independent width/height controls with Auto resets. |
@@ -50,6 +51,7 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 - Standard Linux `/proc` and `/sys` interfaces, Python 3 for process snapshots, and system utilities (`df`, `timeout`, and a POSIX shell) for disk and sensor readings.
 - Optional: UPower for battery status and energy flow; an MPRIS-capable player for media controls; `nvidia-smi` for NVIDIA readings; `intel_gpu_top` from `intel-gpu-tools` for Intel usage when performance counters are readable by the current user. AMD utilization, VRAM, and GPU temperatures use readable `/sys` interfaces where the driver exposes them. `lspci` improves detected GPU names.
 - Optional: curl 8.4+ for size- and time-limited HTTPS album-cover downloads. Local covers and the theme-matched fallback work without it.
+- Optional: `wl-clipboard` for explicit paste in settings. Typing works without it; paste failures retain the existing field value.
 - Optional: `powerprofilesctl` and a supported power-profile driver for profile detection and switching. The profile buttons call Omarchy's `omarchy-powerprofiles-set` command, which also remembers the selection in the user's Omarchy state directory.
 
 Unavailable hardware readings are hidden or shown as unavailable. Detected GPUs remain selectable when readings are missing or the device is sleeping. The plugin does not install extra packages, change performance-counter permissions, or request elevated privileges.
@@ -77,6 +79,14 @@ Settings are saved to `~/.config/omarchy/tammy-widgets.json`. This established f
 The media card reserves its playback height while idle, so starting a player or receiving a track duration does not expand it over neighboring cards. If an older saved layout already overlaps, reposition the affected cards or apply a layout preset once.
 
 Installing the plugin does not overwrite existing preferences. Changes made in the settings panel save to the plugin's own JSON file, and resetting to defaults requires confirmation.
+
+Settings are written atomically after a short debounce. Unchanged startup saves do not block later edits, and normal component shutdown flushes pending edits. This does not guarantee unsaved changes survive a power failure or a forced process kill.
+
+### Settings clipboard handling
+
+The settings window exists only while open. Its native text renderers remain read-only even during keyboard editing, preventing Qt's automatic clipboard-availability handler from reading foreign clipboard offers. Explicit **Ctrl+V** or **Shift+Insert** runs an asynchronous helper with a 16 KiB input cap and one shared two-second deadline for MIME discovery and content. Oversized, slow, non-text and invalid UTF-8 offers are rejected; closing or leaving the field cancels the request. No clipboard watcher runs in the background.
+
+Fields retain cursor navigation, mouse selection, select-all, copy/cut, and bounded undo/redo. Direct key text and UTF-8 paste are supported; native IME/preedit composition is not available through the read-only renderer. Errors are available through the field's accessibility description.
 
 ### Layout editor and monitor setups
 
@@ -123,6 +133,8 @@ sh tests/run-gpu-qml-tests.sh
 sh tests/sampling-run-qml-tests.sh
 NETWORK_QML_TESTS=1 node --test tests/network-history.test.cjs
 sh tests/run-layout-qml-tests.sh
+sh tests/run-persistence-qml-tests.sh
+sh tests/run-safe-textfield-qml-tests.sh
 sh tests/run-sizing-qml-tests.sh
 LIST_CARD_QML_TESTS=1 node --test tests/list-card-resizing.test.cjs
 node --test tests/media-resizing.test.cjs
