@@ -60,3 +60,31 @@ test('battery does not fabricate power or percentage when unavailable', () => {
   assert.equal(battery('charging', 20, { present: false }).status, 'No battery')
   assert.equal(battery('charging', 20, { ready: false }).status, 'Loading battery…')
 })
+
+test('malformed CPU and memory counters stay unavailable', () => {
+  for (const raw of ['cpu 1', 'cpu x 0 0 5', 'cpu 1 0 0 -5', 'cpu Infinity 0 0 5'])
+    assert.equal(model.parseCpuStat(raw), null)
+  for (const available of ['garbage', 'Infinity', '-1', '2000']) {
+    const memory = model.parseMemInfo(`MemTotal: 1000 kB\nMemAvailable: ${available} kB`)
+    assert.equal(memory.valid, false)
+    assert.equal(memory.usedGb, 0)
+    assert.equal(memory.freeGb, 0)
+  }
+  const prior = model.parseCpuStat('cpu 100 0 50 800 50 0 0 0')
+  const reset = model.parseCpuStat('cpu 90 0 60 900 50 0 0 0')
+  assert.deepEqual(model.cpuBreakdown(prior, reset), {user:0, system:0})
+})
+
+test('default network route follows lowest metric and accepts direct tunnels', () => {
+  const header = 'Iface Destination Gateway Flags RefCnt Use Metric Mask'
+  const routes = `${header}\nwlan0 00000000 0100000A 0003 0 0 600 00000000\neth0 00000000 0100000A 0003 0 0 100 00000000`
+  assert.equal(model.parseDefaultInterface(routes), 'eth0')
+  assert.equal(model.parseDefaultInterface(routes + '\nwg0 00000000 00000000 0001 0 0 50 00000000'), 'wg0')
+  assert.equal(model.parseDefaultInterface(routes + '\nbad0 00000000 00000000 0201 0 0 0 00000000'), 'eth0')
+  assert.deepEqual(model.parseNetDev('eth0: nope 0 0 0 0 0 0 0 20'), {})
+})
+
+test('disk exclusions respect directory boundaries', () => {
+  const raw = 'Mounted Size Used Avail Use% Source\n/run 1G 0G 1G 0% tmpfs\n/runtime-data 10G 2G 8G 20% /dev/data\n/tmp/archive 1G 0G 1G 0% /dev/temp\n/tmp-backup 10G 1G 9G 10% /dev/backup'
+  assert.deepEqual(model.parseDiskUsage(raw, []).map(d => d.mount), ['/runtime-data', '/tmp-backup'])
+})

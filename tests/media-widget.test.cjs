@@ -25,7 +25,7 @@ function extractFunction(name) {
   throw new Error(`unterminated ${name}`)
 }
 
-const context = {}
+const context = { MprisLoopState: { None: 0, Track: 1, Playlist: 2 } }
 vm.createContext(context)
 vm.runInContext([
   extractFunction('canRunAction'),
@@ -43,6 +43,7 @@ function fakePlayer(overrides = {}) {
     trackTitle: 'Fixture track',
     trackArtist: 'Fixture artist',
     length: 180,
+    lengthSupported: true,
     position: 55,
     positionSupported: true,
     canSeek: true,
@@ -112,11 +113,11 @@ test('media controls contain no global transport fallback', () => {
 })
 
 test('transport controls expose keyboard and accessibility affordances', () => {
-  assert.equal((source.match(/Accessible\.role: Accessible\.Button/g) || []).length, 3)
-  assert.equal((source.match(/activeFocusOnTab: enabled/g) || []).length, 3)
-  assert.equal((source.match(/Keys\.onReturnPressed:/g) || []).length, 3)
-  assert.equal((source.match(/Keys\.onEnterPressed:/g) || []).length, 3)
-  assert.equal((source.match(/Keys\.onSpacePressed:/g) || []).length, 3)
+  assert.equal((source.match(/Accessible\.role: Accessible\.Button/g) || []).length, 4)
+  assert.equal((source.match(/activeFocusOnTab: enabled/g) || []).length, 4)
+  assert.equal((source.match(/Keys\.onReturnPressed:/g) || []).length, 4)
+  assert.equal((source.match(/Keys\.onEnterPressed:/g) || []).length, 4)
+  assert.equal((source.match(/Keys\.onSpacePressed:/g) || []).length, 4)
   assert.match(source, /Accessible\.name: "Previous track"/)
   assert.match(source, /Accessible\.name: root\.isPlaying \? "Pause" : "Play"/)
   assert.match(source, /Accessible\.name: "Next track"/)
@@ -230,6 +231,16 @@ test('unknown duration retains a visible timeline with unavailable time placehol
   assert.equal(timeLabel(knownPosition, 'mediaDurationTime'), '--:--')
   assert.equal(knownPosition.root.progress, 0)
   assert.equal(knownPosition.root.canSeek, false)
+})
+
+test('Quickshell position-as-length fallback is not a real duration', () => {
+  const state = timingState(fakePlayer({ length: 55, lengthSupported: false, position: 55 }))
+  assert.equal(state.root.trackLength, 0)
+  assert.equal(state.root.positionAvailable, true)
+  assert.equal(state.root.canSeek, false)
+  assert.equal(state.root.progress, 0)
+  assert.equal(timeLabel(state, 'mediaElapsedTime'), '0:55')
+  assert.equal(timeLabel(state, 'mediaDurationTime'), '--:--')
 })
 
 test('only finite positive duration and finite supported nonnegative position are available', () => {
@@ -443,7 +454,7 @@ function mediaLayout(showControls = true, showAlbumArt = true) {
   }
   binding(layout.trackInfo, 'width', layoutExpression('id: trackInfo', 'width', 6), layout.content)
   binding(layout.seekRow, 'width', layoutExpression('id: seekRow', 'width', 6), layout.content)
-  binding(layout.transportRow, 'width', '3 * root.transportButtonSize + 2 * root.transportSpacing')
+  binding(layout.transportRow, 'width', layoutExpression('id: transportRow', 'width', 6), layout.content)
   for (const id of ['seekRow', 'transportRow']) {
     binding(layout[id], 'y', layoutExpression(`id: ${id}`, 'y', 6), layout.content)
   }
@@ -479,9 +490,9 @@ for (const showControls of [true, false]) {
           assert.equal(root.naturalCardHeight, originalHeight, state.name)
           assert.equal(root.height, originalHeight, state.name)
           assert.equal(root.compactLayout, false)
-          assert.equal(root.transportButtonSize, 44)
+          assert.equal(root.transportButtonSize, width === 200 ? 28 : 44)
           assert.equal(layout.trackInfo.height, 64)
-          assert.equal(layout.content.anchors.topMargin, 16)
+          assert.equal(layout.content.anchors.topMargin, width === 200 && showControls && state.hasMedia ? 24 : 16)
           assert.equal(layout.artBox.width, showAlbumArt ? 64 : 0)
         }
       }
@@ -576,4 +587,22 @@ test('compact layout uses geometry, readable elided metadata, and full accessibi
   assert.equal(tall.root.stackedArtwork, true)
   assert.equal(tall.artBox.width, 168)
   assert.equal(tall.metadata.width, 168)
+})
+
+
+test('repeat cycles off, playlist, track, off on the displayed player only', () => {
+  const player = fakePlayer({ canControl: true, loopSupported: true, loopState: 0 })
+  const other = fakePlayer({ canControl: true, loopSupported: true, loopState: 0 })
+  usePlayer(player, [other])
+  for (const expected of [2, 1, 0]) {
+    assert.equal(context.runAction('loop'), true)
+    assert.equal(player.loopState, expected)
+    assert.equal(other.loopState, 0)
+  }
+  for (const overrides of [{ canControl: false }, { loopSupported: false }]) {
+    const unsupported = fakePlayer({ canControl: true, loopSupported: true, loopState: 0, ...overrides })
+    usePlayer(unsupported)
+    assert.equal(context.runAction('loop'), false)
+    assert.equal(unsupported.loopState, 0)
+  }
 })

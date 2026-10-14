@@ -18,8 +18,7 @@ import "WidgetSizing.js" as Sizing
 // Proxy players (playerctld) are deprioritized.
 // Idle browser-proxy players without track titles are skipped.
 //
-// Position tracking uses a 1-second Timer to interpolate forward
-// while playing, with periodic sync to the real MPRIS position.
+// Fresh D-Bus snapshots recover silent repeats and late duration updates.
 // Quickshell reports position/length in seconds (not microseconds).
 BorderSurface {
   id: root
@@ -61,9 +60,12 @@ BorderSurface {
   readonly property real contentInsets: root.compactLayout ? 12 : 24
   readonly property real layoutSpacing: root.compactLayout ? 4 : 14
   readonly property real seekRowHeight: root.compactLayout ? 24 : 20
-  readonly property real transportButtonSize: root.compactLayout
-    ? Math.max(28, Math.min(44, 28 + (root.height - root.minimumCardHeight) / 4)) : 44
-  readonly property real transportSpacing: root.compactLayout ? 4 : 8
+  readonly property real transportButtonSize: Math.min(
+    (root.width - 2 * root.contentMargin - (root.inlineControls ? 3 : 4) * root.transportSpacing)
+      / (root.inlineControls ? 4 : 5),
+    root.compactLayout ? Math.max(28, Math.min(44, 28 + (root.height - root.minimumCardHeight) / 4)) : 44)
+  readonly property real transportSpacing: root.compactLayout ? 4
+    : Math.min(8, Math.max(4, (root.width - 2 * root.contentMargin - 5 * 28) / 4))
   readonly property real metadataHeight: root.compactMetadata ? 28 : 54
   readonly property real trackRowHeight: root.compactLayout
     ? root.height - root.contentInsets - root.seekRowHeight - root.layoutSpacing
@@ -76,7 +78,7 @@ BorderSurface {
   readonly property real artworkDiameter: root.stackedArtwork
     ? root.trackRowHeight - root.metadataHeight - root.layoutSpacing
     : Math.min(root.trackRowHeight, Math.max(28, root.width - 2 * root.contentMargin - root.layoutSpacing
-        - (root.inlineControls ? 3 * root.transportButtonSize + 2 * root.transportSpacing + root.layoutSpacing : 0) - 90))
+        - (root.inlineControls ? 4 * root.transportButtonSize + 3 * root.transportSpacing + root.layoutSpacing : 0) - 90))
   // Reserve seek space for unknown durations too; metadata/state cannot change
   // the card's height or introduce a content -> height -> content binding loop.
   readonly property real playbackContentHeight: root.trackRowHeight + root.seekRowHeight + root.layoutSpacing
@@ -253,10 +255,15 @@ BorderSurface {
 
   // ── Position tracking (seconds, not microseconds) ──
 
-  readonly property real trackLength: activePlayer && isFinite(Number(activePlayer.length))
+  // Without lengthSupported Quickshell returns position as length, not a
+  // duration. Never expose that fallback as a seekable, 100%-filled track.
+  readonly property real trackLength: root.timingSnapshot ? root.timingSnapshot.length
+    : activePlayer && activePlayer.lengthSupported
+    && isFinite(Number(activePlayer.length))
     && Number(activePlayer.length) > 0 ? Number(activePlayer.length) : 0
   readonly property bool durationAvailable: root.trackLength > 0
-  readonly property bool positionAvailable: !!(root.activePlayer && root.activePlayer.positionSupported
+  readonly property bool positionAvailable: root.timingSnapshot ? root.timingSnapshot.position !== null
+    : !!(root.activePlayer && root.activePlayer.positionSupported
     && isFinite(Number(root.activePlayer.position)) && Number(root.activePlayer.position) >= 0)
   readonly property bool timelineAvailable: root.hasMedia
   readonly property bool canSeek: !!(activePlayer && activePlayer.canSeek
@@ -269,27 +276,127 @@ BorderSurface {
   readonly property real progress: root.durationAvailable && root.positionAvailable
     ? Math.max(0, Math.min(1, shownPosition / trackLength)) : 0
 
+  property var timingSnapshot: null
+  property real timingSnapshotAt: 0
+  property int timingEpoch: 0
+  property var timingProcess: null
+  readonly property string timingKey: root.playerKey(root.activePlayer) + "\n"
+    + (root.activePlayer ? root.activePlayer.uniqueId : "") + "\n" + root.title
+  onTimingKeyChanged: {
+    root.invalidateTiming()
+    root.syncPosition()
+    root.requestTiming()
+  }
+
+  function invalidateTiming() {
+    root.timingEpoch += 1
+    root.timingSnapshot = null
+  }
+
+  function applyTiming(sample, key, epoch) {
+    if (key !== root.timingKey || epoch !== root.timingEpoch || root.seeking || !root.activePlayer) return false
+    if (!sample || (sample.position !== null && (!isFinite(sample.position) || sample.position < 0))
+        || !isFinite(sample.length) || sample.length < 0) return false
+    if (sample.title !== String(root.activePlayer.trackTitle || "")) return false
+    var metadata = root.activePlayer.metadata || {}
+    // Qt exposes an object-path variant as an opaque object, whose String()
+    // includes a QVariant wrapper rather than the D-Bus path. Compare only
+    // plain strings; timingKey/uniqueId and title still guard opaque variants.
+    if (sample.trackId && typeof metadata["mpris:trackid"] === "string"
+        && sample.trackId !== metadata["mpris:trackid"]) return false
+    root.timingSnapshotAt = Date.now()
+    root.timingSnapshot = sample
+    root.syncPosition()
+    return true
+  }
+
+  function requestTiming() {
+    if (!root.samplingActive || !root.hasMedia || root.seeking || root.timingProcess) return
+    var helper = decodeURIComponent(String(Qt.resolvedUrl("media_snapshot.py")).replace(/^file:\/\//, ""))
+    var process = timingProcessComponent.createObject(root, {
+      requestKey: root.timingKey, requestEpoch: root.timingEpoch,
+      command: ["python3", helper, root.playerKey(root.activePlayer)]
+    })
+    if (!process) return
+    root.timingProcess = process
+    process.running = true
+  }
+
+  Component {
+    id: timingProcessComponent
+    Process {
+      id: timingFetch
+      property string requestKey: ""
+      property int requestEpoch: 0
+      property bool stdoutReady: false
+      property bool exitReady: false
+      property int exitCode: -1
+      property string result: ""
+      function finish() {
+        if (!stdoutReady || !exitReady) return
+        if (root.timingProcess === timingFetch) {
+          if (exitCode === 0) {
+            try { root.applyTiming(JSON.parse(result), requestKey, requestEpoch) } catch (_) {}
+          }
+          root.timingProcess = null
+        }
+        timingFetch.destroy()
+      }
+      stdout: StdioCollector {
+        waitForEnd: true
+        onStreamFinished: {
+          timingFetch.result = text
+          timingFetch.stdoutReady = true
+          timingFetch.finish()
+        }
+      }
+      onExited: function(code) {
+        timingFetch.exitCode = code
+        timingFetch.exitReady = true
+        timingFetch.finish()
+      }
+    }
+  }
+
   function syncPosition() {
     root.positionSampleAt = Date.now()
     if (root.seeking) return
     // Reading the cached signal value is safe while periodic sampling is
     // paused, and prevents a previous player's progress surviving a switch.
+    if (root.timingSnapshot) {
+      var sample = root.timingSnapshot
+      var elapsed = Math.max(0, Date.now() - root.timingSnapshotAt) / 1000
+      // Stop extrapolating if fresh reads fail. Never run an old sample forever.
+      elapsed = Math.min(elapsed, Sampling.interval(2000, root.samplingMultiplier) / 1000)
+      var value = sample.position === null ? 0 : sample.position
+        + (root.isPlaying && sample.playing && sample.length > 0 ? elapsed * sample.rate : 0)
+      root.livePosition = sample.length > 0 ? Math.min(sample.length, value) : value
+      return
+    }
     var player = root.activePlayer
     var position = player ? Number(player.position) : -1
     root.livePosition = player && player.positionSupported && isFinite(position) && position >= 0 ? position : 0
   }
   onSamplingActiveChanged: {
+    root.invalidateTiming()
+    root.requestTiming()
     root.seeking = false
     root.syncPosition()
     root.refreshArtwork()
   }
-  onIsPlayingChanged: root.syncPosition()
+  onIsPlayingChanged: {
+    root.invalidateTiming()
+    root.syncPosition()
+    root.requestTiming()
+  }
 
   // Sync from real MPRIS position when it changes
   Connections {
     target: root.activePlayer
     ignoreUnknownSignals: true
     function onPositionChanged() {
+      // Other shell consumers emit this signal to animate the cached getter.
+      // It is not proof of a fresh D-Bus sample; keep our authoritative anchor.
       root.syncPosition()
     }
     function onTrackTitleChanged() {
@@ -303,6 +410,11 @@ BorderSurface {
       root.syncPosition()
     }
     function onLengthChanged() {
+      // Without lengthSupported, Quickshell emits lengthChanged for position.
+      if (root.activePlayer && root.activePlayer.lengthSupported
+          && (!root.timingSnapshot || root.activePlayer.length !== root.timingSnapshot.length)) {
+        root.invalidateTiming()
+      }
       root.syncPosition()
     }
     function onPositionSupportedChanged() {
@@ -313,6 +425,7 @@ BorderSurface {
 
   // Reset when active player changes
   onActivePlayerChanged: {
+    root.invalidateTiming()
     root.seeking = false
     root.seekPreview = 0
     root.syncPosition()
@@ -323,46 +436,39 @@ BorderSurface {
     root.syncPosition()
   }
 
-  // Use elapsed time so slowing the timer does not slow track progress.
+  // Quickshell already interpolates position using the playback rate. Read it
+  // on each tick instead of adding wall time at an assumed 1x speed.
   Timer {
     id: positionTimer
     objectName: "mediaPositionTimer"
     interval: Sampling.interval(1000, root.samplingMultiplier)
     repeat: true
-    running: root.samplingActive && root.isPlaying && root.durationAvailable && root.positionAvailable && !root.seeking
-    onTriggered: {
-      var now = Date.now()
-      root.livePosition = Math.min(root.trackLength,
-        root.livePosition + Math.max(0, now - root.positionSampleAt) / 1000)
-      root.positionSampleAt = now
-    }
+    running: root.samplingActive && root.isPlaying && root.positionAvailable && !root.seeking
+    onTriggered: root.syncPosition()
   }
 
-  // Periodic sync to correct drift (many players don't emit positionChanged)
+  // Read the player over D-Bus: Quickshell's position getter is an
+  // extrapolated cache and cannot detect repeats without a Seeked signal.
   Timer {
     id: positionSyncTimer
     objectName: "mediaPositionSyncTimer"
-    interval: Sampling.interval(5000, root.samplingMultiplier)
+    interval: Sampling.interval(2000, root.samplingMultiplier)
     repeat: true
     running: root.samplingActive && root.hasMedia && root.activePlayer !== null
-    onTriggered: {
-      if (root.positionAvailable && !root.seeking) {
-        var realPos = root.activePlayer.position
-        var diff = Math.abs(realPos - root.livePosition)
-        if (diff > 3) {
-          root.livePosition = realPos
-          root.positionSampleAt = Date.now()
-        }
-      }
-    }
+    triggeredOnStart: true
+    onTriggered: root.requestTiming()
   }
 
   // ── Controls ──
   // Transport actions intentionally target the exact player rendered by this
   // card. Never fall back to a global media action: with multiple players that
   // could control a different source than the one named above the controls.
+  readonly property int loopState: root.activePlayer && root.activePlayer.loopSupported
+    ? root.activePlayer.loopState : MprisLoopState.None
+
   function canRunAction(action, player) {
     if (!player) return false
+    if (action === "loop") return !!(player.canControl && player.loopSupported)
     if (action === "previous") return !!player.canGoPrevious
     if (action === "next") return !!player.canGoNext
     if (action === "playPause") {
@@ -377,7 +483,11 @@ BorderSurface {
     var player = root.activePlayer
     if (!root.canRunAction(action, player)) return false
 
-    if (action === "previous") player.previous()
+    if (action === "loop") {
+      player.loopState = player.loopState === MprisLoopState.None ? MprisLoopState.Playlist
+        : player.loopState === MprisLoopState.Playlist ? MprisLoopState.Track : MprisLoopState.None
+    }
+    else if (action === "previous") player.previous()
     else if (action === "next") player.next()
     else if (player.isPlaying && player.canPause) player.pause()
     else if (!player.isPlaying && player.canPlay) player.play()
@@ -387,6 +497,7 @@ BorderSurface {
 
   function previewSeek(fraction) {
     if (!root.canSeek) return
+    root.timingEpoch += 1
     root.seeking = true
     root.seekPreview = Math.max(0, Math.min(trackLength, fraction * trackLength))
   }
@@ -400,6 +511,7 @@ BorderSurface {
       return
     }
     var newPos = root.seekPreview
+    root.invalidateTiming()
     root.seeking = false
     root.livePosition = newPos
     root.positionSampleAt = Date.now()
@@ -665,11 +777,12 @@ BorderSurface {
       }
     }
 
-    // --- Controls: prev / play-pause / next ---
-    Row {
+    // Keep the primary three controls centered; repeat occupies a side slot.
+    Item {
       id: transportRow
       objectName: "mediaTransportRow"
-      spacing: root.transportSpacing
+      width: (root.inlineControls ? 4 : 5) * root.transportButtonSize
+        + (root.inlineControls ? 3 : 4) * root.transportSpacing
       x: root.inlineControls ? parent.width - width : (parent.width - width) / 2
       y: root.inlineControls ? (trackInfo.height - height) / 2
         : trackInfo.height + root.layoutSpacing + seekRow.height + root.layoutSpacing
@@ -679,6 +792,7 @@ BorderSurface {
       // Previous
       Item {
         id: previousButton
+        x: (0 + (root.inlineControls ? 0 : 1)) * (root.transportButtonSize + root.transportSpacing)
         objectName: "mediaPreviousButton"
         width: root.transportButtonSize
         height: width
@@ -731,6 +845,7 @@ BorderSurface {
       // Play/Pause
       Rectangle {
         id: playPauseButton
+        x: (1 + (root.inlineControls ? 0 : 1)) * (root.transportButtonSize + root.transportSpacing)
         objectName: "mediaPlayPauseButton"
         width: root.transportButtonSize
         height: width
@@ -777,6 +892,7 @@ BorderSurface {
       // Next
       Item {
         id: nextButton
+        x: (2 + (root.inlineControls ? 0 : 1)) * (root.transportButtonSize + root.transportSpacing)
         objectName: "mediaNextButton"
         width: root.transportButtonSize
         height: width
@@ -822,6 +938,63 @@ BorderSurface {
           onClicked: {
             nextButton.forceActiveFocus()
             root.runAction("next")
+          }
+        }
+      }
+
+      // Repeat: off → playlist → track → off
+      Item {
+        id: loopButton
+        x: (3 + (root.inlineControls ? 0 : 1)) * (root.transportButtonSize + root.transportSpacing)
+        objectName: "mediaLoopButton"
+        width: root.transportButtonSize
+        height: width
+        anchors.verticalCenter: parent.verticalCenter
+        enabled: root.canRunAction("loop", root.activePlayer)
+        activeFocusOnTab: enabled
+        opacity: enabled ? 1 : 0.32
+        Accessible.role: Accessible.Button
+        Accessible.name: !enabled ? "Repeat unavailable for this player"
+          : root.loopState === MprisLoopState.Track ? "Repeat track; activate to turn off"
+          : root.loopState === MprisLoopState.Playlist ? "Repeat playlist; activate to repeat track"
+          : "Repeat off; activate to repeat playlist"
+        Accessible.onPressAction: if (enabled) root.runAction("loop")
+
+        Keys.onReturnPressed: if (enabled) root.runAction("loop")
+        Keys.onEnterPressed: if (enabled) root.runAction("loop")
+        Keys.onSpacePressed: if (enabled) root.runAction("loop")
+
+        Rectangle {
+          anchors.fill: parent
+          anchors.margins: 3
+          radius: 18
+          color: loopButton.activeFocus
+            ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.12)
+            : "transparent"
+          border.color: loopButton.activeFocus ? root.accentColor : "transparent"
+          border.width: loopButton.activeFocus ? 1.5 : 0
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          text: root.loopState === MprisLoopState.Track ? "󰑘" : "󰑖"
+          color: root.loopState !== MprisLoopState.None ? root.accentColor
+            : loopHover.containsMouse || loopButton.activeFocus ? root.textColor
+            : Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.6)
+          font.family: Style.font.family
+          font.pixelSize: root.compactLayout ? 16 : 20
+          anchors.centerIn: parent
+        }
+
+        MouseArea {
+          id: loopHover
+          anchors.fill: parent
+          hoverEnabled: true
+          enabled: loopButton.enabled
+          cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+          onClicked: {
+            loopButton.forceActiveFocus()
+            root.runAction("loop")
           }
         }
       }

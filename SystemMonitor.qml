@@ -65,7 +65,7 @@ BorderSurface {
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300,
     root.widgetGaugeDiameter * root.visibleGaugeCount + Math.max(0, root.visibleGaugeCount - 1) * 16 + 40)
   readonly property real naturalCardHeight: root.visibleGaugeCount === 0 ? 80 : Math.max(80, root.baseGaugeDiameter + (root.showGpu ? 78
-    : 8 + gaugeFont.height + ((root.showCpu && root.cpuUser > 0) || (root.showRam && root.ramUsedGb > 0) ? 4 + gaugeFont.height : 0)) + 40)
+    : 8 + gaugeFont.height + 4 + gaugeFont.height) + 40)
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
   FontMetrics { id: gaugeFont; font.family: Style.font.family; font.pixelSize: 10 }
 
@@ -121,6 +121,7 @@ BorderSurface {
     watchChanges: false
     printErrors: false
     onLoaded: root.updateMemInfo(text())
+    onLoadFailed: { root.memReady = false; root.ramUsedGb = root.ramFreeGb = 0 }
   }
 
   // Read /proc/stat via FileView — no process spawn
@@ -130,6 +131,7 @@ BorderSurface {
     watchChanges: false
     printErrors: false
     onLoaded: root.updateCpuStat(text())
+    onLoadFailed: { root.cpuReady = false; root.prevCpuStat = null; root.cpuUser = root.cpuSystem = 0 }
   }
 
   Timer {

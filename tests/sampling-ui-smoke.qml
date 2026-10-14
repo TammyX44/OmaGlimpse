@@ -140,6 +140,31 @@ ShellRoot {
         batteryCard.setProfile("unsupported")
         compare(batteryCard.profileError, "Unsupported power profile")
       }
+      function test_z_sensor_errors_and_cancelled_disk() {
+        temperatureCard.samplingEnabled = true
+        temperatureCard.updateFan("")
+        compare(temperatureCard.fanRpm, -1)
+        temperatureCard.updateFan("0")
+        compare(temperatureCard.fanRpm, 0)
+        temperatureCard.updateCpuTemp("0")
+        compare(temperatureCard.cpuAvailable, true)
+        compare(temperatureCard.getTemp("CPU"), 0)
+        temperatureCard.updateCpuTemp("invalid")
+        compare(temperatureCard.cpuAvailable, false)
+        temperatureCard.samplingEnabled = false
+        diskCard.samplingEnabled = false
+        diskCard.hasLoaded = false
+        diskCard.errorMessage = ""
+        diskCard.collectionActive = true
+        diskCard.pendingSampleEpoch = diskCard.sampleEpoch - 1
+        diskCard.pendingExitCode = 1
+        diskCard.pendingStderr = "cancelled old read"
+        diskCard.stdoutReady = diskCard.stderrReady = diskCard.exitReady = true
+        diskCard.finishRefresh()
+        compare(diskCard.hasLoaded, false)
+        compare(diskCard.errorMessage, "")
+        compare(diskCard.collectionActive, false)
+      }
       function test_battery_confirmation_timeout_retains_error() {
         batteryCard.pendingProfile = "performance"
         var timer = findChild(batteryCard, "profileConfirmationTimer")

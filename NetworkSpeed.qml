@@ -23,6 +23,7 @@ BorderSurface {
   property real gaugeDiameter: 120
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
 
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}
   readonly property int refreshInterval: Config.widgetRefreshInterval(root.config, root.widgetId)
@@ -82,13 +83,13 @@ BorderSurface {
   property real historyTime: 0
 
   function refresh() {
-    if (!root.samplingEnabled) return
+    if (!root.samplingActive) return
     routeFile.reload()
     netFile.reload()
   }
 
   function updateNet(raw, timestamp) {
-    if (!root.samplingEnabled) return
+    if (!root.samplingActive) return
     var now = timestamp === undefined ? Date.now() : timestamp
     root.historyTime = now
     var devs = Model.parseNetDev(raw)
@@ -151,7 +152,7 @@ BorderSurface {
     root.rxSpeed = 0
     root.txSpeed = 0
     root.sampleReady = false
-    root.sampleState = root.samplingEnabled ? "Measuring…" : "Paused"
+    root.sampleState = root.samplingActive ? "Measuring…" : "Paused"
   }
 
   // Read /proc/net/dev via FileView — no process spawn, near-zero overhead.
@@ -159,12 +160,12 @@ BorderSurface {
   // watchChanges: false and reload on a timer.
   FileView {
     id: netFile
-    path: "/proc/net/dev"
+    path: root.samplingActive ? "/proc/net/dev" : ""
     watchChanges: false
     printErrors: false
     onLoaded: root.updateNet(text())
     onLoadFailed: {
-      if (!root.samplingEnabled) return
+      if (!root.samplingActive) return
       root.resetBaseline()
       root.sampleState = "Unavailable"
     }
@@ -174,16 +175,17 @@ BorderSurface {
   // byte counts, which can be dominated by stale VPN/container devices.
   FileView {
     id: routeFile
-    path: "/proc/net/route"
+    path: root.samplingActive ? "/proc/net/route" : ""
     watchChanges: false
     printErrors: false
     onLoaded: root.defaultInterface = Model.parseDefaultInterface(text())
+    onLoadFailed: root.defaultInterface = ""
   }
 
   Timer {
     objectName: "networkSampleTimer"
     interval: root.samplingInterval
-    running: root.samplingEnabled
+    running: root.samplingActive
     repeat: true
     onTriggered: root.refresh()
   }
@@ -192,13 +194,13 @@ BorderSurface {
     root.resetBaseline()
     root.refresh()
   })
-  onSamplingEnabledChanged: {
+  onSamplingActiveChanged: {
     root.resetBaseline()
-    if (root.samplingEnabled) root.refresh()
+    if (root.samplingActive) root.refresh()
   }
   onSamplingIntervalChanged: {
     root.resetBaseline()
-    if (root.samplingEnabled) root.refresh()
+    if (root.samplingActive) root.refresh()
   }
   Component.onCompleted: root.refresh()
 

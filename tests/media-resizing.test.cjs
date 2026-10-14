@@ -40,10 +40,14 @@ ShellRoot {
     property bool canPlay: true
     property bool canPause: true
     property bool canTogglePlaying: true
+    property bool canControl: true
+    property bool loopSupported: true
+    property int loopState: MprisLoopState.None
     property bool canSeek: true
     property bool positionSupported: true
     property real position: 55
     property real length: 180
+    property bool lengthSupported: length > 0
     property string actions: ""
     function previous() { actions += "previous;" }
     function next() { actions += "next;" }
@@ -164,11 +168,17 @@ ShellRoot {
         compareReported(transport.visible, controls)
         if (controls) {
           visibleChildrenFit(transport, target)
-          for (var name of ["mediaPreviousButton", "mediaPlayPauseButton", "mediaNextButton"]) {
+          for (var name of ["mediaPreviousButton", "mediaPlayPauseButton", "mediaNextButton", "mediaLoopButton"]) {
             var button = findChild(target, name)
             verifyReported(button.visible && button.enabled)
             verifyReported(button.width >= 28 && button.height >= 28)
             compareReported(button.scale, 1)
+          }
+          if (!target.inlineControls) {
+            var play = findChild(target, "mediaPlayPauseButton")
+            var playCenter = target.mapFromItem(play, play.width / 2, 0).x
+            verifyReported(Math.abs(playCenter - target.width / 2) < 0.1,
+              "play/pause must remain centered when repeat is present")
           }
           var timelinePoint = target.mapFromItem(timeline, 0, 0)
           var transportPoint = target.mapFromItem(transport, 0, 0)
@@ -338,6 +348,64 @@ ShellRoot {
         compareReported(player.position, 12)
         playbackFits(card, true)
       }
+      function test_f_repeat_and_position_sampling() {
+        configure(200, 180, true, true)
+        card.players = [player]
+        player.canControl = true; player.loopSupported = true; player.loopState = MprisLoopState.None
+        wait(20)
+        var repeat = findChild(card, "mediaLoopButton")
+        mouseClick(repeat)
+        compareReported(player.loopState, MprisLoopState.Playlist)
+        repeat.forceActiveFocus(); keyClick(Qt.Key_Space)
+        compareReported(player.loopState, MprisLoopState.Track)
+        keyClick(Qt.Key_Return)
+        compareReported(player.loopState, MprisLoopState.None)
+        player.loopSupported = false
+        wait(1)
+        verifyReported(!repeat.enabled)
+        mouseClick(repeat)
+        compareReported(player.loopState, MprisLoopState.None)
+        player.loopSupported = true
+        player.position = 83.5
+        findChild(card, "mediaPositionTimer").triggered()
+        compareReported(card.livePosition, 83.5)
+      }
+      function test_g_silent_repeat_and_late_duration() {
+        configure(340, 180, true, true)
+        player.trackTitle = "Silent repeat fixture"
+        player.length = 180; player.position = 179; player.positionSupported = true
+        player.isPlaying = true; player.canSeek = true; card.players = [player]
+        wait(20)
+        var key = card.timingKey
+        var epoch = card.timingEpoch
+        function sample(position, length) {
+          return {position:position,length:length,title:player.trackTitle,trackId:"",rate:1,playing:true}
+        }
+        verifyReported(card.applyTiming(sample(179, 180), key, epoch))
+        verifyReported(card.progress > 0.99)
+        // Player repeats without any QObject signal: its cache still says 179.
+        verifyReported(card.applyTiming(sample(0.2, 180), key, epoch))
+        verifyReported(card.progress < 0.01, "silent repeat must reset the bar")
+        compareReported(player.position, 179, "polling must never change playback")
+        player.positionChanged()
+        verifyReported(card.timingSnapshot !== null, "synthetic position signals must retain the fresh anchor")
+        verifyReported(card.progress < 0.01)
+        // Duration can arrive late or be corrected without a metadata signal.
+        verifyReported(card.applyTiming(sample(1, 0), key, epoch))
+        compareReported(card.durationAvailable, false)
+        verifyReported(card.applyTiming(sample(2, 245), key, epoch))
+        compareReported(card.trackLength, 245)
+        compareReported(findChild(card, "mediaDurationTime").text, "4:05")
+        card.previewSeek(0.5)
+        verifyReported(!card.applyTiming(sample(3, 245), key, epoch), "pre-seek reply must be rejected")
+        card.commitSeek()
+        verifyReported(!card.applyTiming(sample(3, 245), key, epoch), "late reply must not undo a seek")
+        compareReported(player.position, 122.5)
+        player.trackTitle = "Next track"
+        wait(1)
+        verifyReported(!card.applyTiming(sample(4, 245), key, epoch), "old-track reply must be rejected")
+        compareReported(card.timingSnapshot, null)
+      }
       function test_z_capture() {
         if (!Quickshell.env("MEDIA_TEST_IMAGE")) return
         configure(340, 0, true, true)
@@ -397,7 +465,7 @@ test('real Qt media layout fits compact dimensions and keeps playback usable', {
     assert.match(output, /MEDIA_RESIZING_FAILURES 0\b/, output)
     for (const name of ['a_auto_compact_and_states', 'b_compact_controls_and_seek_work',
       'c_unsupported_seek_does_not_mutate_position', 'd_player_switch_resets_progress_and_drag',
-      'e_track_change_cancels_drag', 'z_capture']) {
+      'e_track_change_cancels_drag', 'f_repeat_and_position_sampling', 'g_silent_repeat_and_late_duration', 'z_capture']) {
       assert.match(output, new RegExp(`MEDIA_RESIZING_PASS test_${name}\\b`), output)
     }
     assert.doesNotMatch(output, /MEDIA_RESIZING_FAIL\b|FAIL!|ReferenceError|TypeError|Failed to load configuration|Unable to assign|Binding loop/)

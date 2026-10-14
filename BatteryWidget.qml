@@ -226,7 +226,7 @@ BorderSurface {
   function startProfileAction(profile) {
     root.inFlightProfile = profile
     profileConfirmTimer.stop()
-    actionProc.command = ["/usr/share/omarchy/bin/omarchy-powerprofiles-set",
+    actionProc.command = ["timeout", "--kill-after=1s", "10s", "/usr/share/omarchy/bin/omarchy-powerprofiles-set",
       root.onBattery ? "battery" : "ac", profile]
     actionProc.running = true
   }

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zlib
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -17,6 +18,7 @@ from urllib.parse import urlsplit
 MAX_BYTES = 1024 * 1024
 MAX_PIXELS = 4096 * 4096
 MAX_SIDE = 4096
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def curl_has_streaming_limit():
@@ -30,62 +32,170 @@ def curl_has_streaming_limit():
         return False
 
 
-def image_kind(data):
-    """Accept small raster formats with bounded declared dimensions."""
-    if data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) >= 24:
-        if data[12:16] != b"IHDR" or int.from_bytes(data[8:12], "big") != 13:
-            return None
-        width = int.from_bytes(data[16:20], "big")
-        height = int.from_bytes(data[20:24], "big")
-        kind = "png"
-    elif data[:6] in (b"GIF87a", b"GIF89a") and len(data) >= 10:
-        width = int.from_bytes(data[6:8], "little")
-        height = int.from_bytes(data[8:10], "little")
-        kind = "gif"
-    elif data.startswith(b"\xff\xd8"):
-        offset = 2
-        width = height = 0
-        while offset + 4 <= len(data):
-            if data[offset] != 0xff:
-                break
-            marker = data[offset + 1]
-            offset += 2
-            if marker in (0xd8, 0xd9) or 0xd0 <= marker <= 0xd7:
-                continue
-            if marker == 0xda:
-                break
-            length = int.from_bytes(data[offset:offset + 2], "big")
-            if length < 2 or offset + length > len(data):
-                break
-            if marker in (0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7,
-                          0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf) and length >= 7:
-                height = int.from_bytes(data[offset + 3:offset + 5], "big")
-                width = int.from_bytes(data[offset + 5:offset + 7], "big")
-                break
-            offset += length
-        kind = "jpg"
-    elif data.startswith(b"RIFF") and data[8:12] == b"WEBP" and len(data) >= 30:
-        tag = data[12:16]
-        if tag == b"VP8X":
-            width = 1 + int.from_bytes(data[24:27], "little")
-            height = 1 + int.from_bytes(data[27:30], "little")
-        elif tag == b"VP8L" and data[20] == 0x2f:
-            bits = int.from_bytes(data[21:25], "little")
-            width = (bits & 0x3fff) + 1
-            height = ((bits >> 14) & 0x3fff) + 1
-        elif tag == b"VP8 " and data[23:26] == b"\x9d\x01\x2a":
-            width = int.from_bytes(data[26:28], "little") & 0x3fff
-            height = int.from_bytes(data[28:30], "little") & 0x3fff
-        else:
-            return None
-        kind = "webp"
-    else:
-        return None
+def png_rows(width, height, depth, color, interlace):
+    """Yield scanline size, pixel count and pass start, including Adam7."""
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color]
+    passes = ((0, 0, 1, 1),) if not interlace else (
+        (0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
+        (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2),
+    )
+    for x, y, dx, dy in passes:
+        columns = max(0, (width - x + dx - 1) // dx)
+        rows = max(0, (height - y + dy - 1) // dy)
+        if columns:
+            for row in range(rows):
+                yield 1 + (columns * channels * depth + 7) // 8, columns, row == 0
 
-    if not (0 < width <= MAX_SIDE and 0 < height <= MAX_SIDE
-            and width * height <= MAX_PIXELS):
+
+def palette_row(row, previous, depth, columns, entries):
+    """Unfilter indexed samples and reject references outside the palette."""
+    filtering = row[0]
+    decoded = bytearray(row[1:])
+    for i in range(len(decoded)):
+        left = decoded[i - 1] if i else 0
+        up = previous[i] if previous else 0
+        corner = previous[i - 1] if previous and i else 0
+        if filtering == 1:
+            predictor = left
+        elif filtering == 2:
+            predictor = up
+        elif filtering == 3:
+            predictor = (left + up) // 2
+        elif filtering == 4:
+            p = left + up - corner
+            a, b, c = abs(p - left), abs(p - up), abs(p - corner)
+            predictor = left if a <= b and a <= c else up if b <= c else corner
+        else:
+            predictor = 0
+        decoded[i] = (decoded[i] + predictor) & 255
+    mask = (1 << depth) - 1
+    for column in range(columns):
+        bit = column * depth
+        index = (decoded[bit // 8] >> (8 - depth - bit % 8)) & mask
+        if index >= entries:
+            return None
+    return decoded
+
+
+def valid_png_pixels(compressed, header, palette_entries):
+    """Check only IDAT, retaining a scanline and (for indexing) its predecessor.
+
+    The declared dimensions bound total expansion. Each inflate is capped at
+    32769 bytes; never use an unbounded inflate or flush, or inflate metadata.
+    """
+    decoder = zlib.decompressobj()
+    previous = None
+    try:
+        for size, columns, first in png_rows(*header):
+            row = decoder.decompress(compressed, size)
+            compressed = decoder.unconsumed_tail
+            if len(row) != size or row[0] > 4:
+                return False
+            # A full palette covers every possible sample. Partial palettes
+            # require undoing filters, with history reset at each Adam7 pass.
+            if header[3] == 3 and palette_entries < 1 << header[2]:
+                previous = palette_row(row, None if first else previous,
+                                       header[2], columns, palette_entries)
+                if previous is None:
+                    return False
+        # One extra byte detects expansion beyond the declared pixel layout.
+        extra = decoder.decompress(compressed, 1)
+        return (not extra and decoder.eof and not decoder.unused_data
+                and not decoder.unconsumed_tail)
+    except zlib.error:
+        return False
+
+
+def sanitize_png(data):
+    """Return a bounded static PNG, or fail closed on invalid retained data.
+
+    Only IHDR/PLTE/tRNS/IDAT/IEND can reach Qt. Discard every other ancillary
+    chunk (text, ICC, EXIF, APNG, even unknown/private chunks) without parsing
+    or decompressing its payload; still check its framing, type and CRC.
+    Reject other formats: their metadata, frames or alternate image headers
+    cannot safely be bounded by the former signature/dimension checks.
+    """
+    if not data.startswith(PNG_SIGNATURE) or len(data) > MAX_BYTES:
         return None
-    return kind
+    offset = len(PNG_SIGNATURE)
+    output = bytearray(PNG_SIGNATURE)
+    header = None
+    palette_entries = 0
+    transparency = False
+    idat_seen = idat_finished = False
+    pixels = []
+    while offset < len(data):
+        if len(data) - offset < 12:
+            return None
+        length = int.from_bytes(data[offset:offset + 4], "big")
+        tag = data[offset + 4:offset + 8]
+        end = offset + 12 + length
+        if (end > len(data) or not re.fullmatch(rb"[A-Za-z]{4}", tag)
+                or tag[2] & 0x20):
+            return None
+        payload = data[offset + 8:end - 4]
+        crc = int.from_bytes(data[end - 4:end], "big")
+        if zlib.crc32(payload, zlib.crc32(tag)) != crc:
+            return None
+        if header is None and tag != b"IHDR":
+            return None
+        if idat_seen and tag != b"IDAT":
+            idat_finished = True
+        keep = True
+        if tag == b"IHDR":
+            if header is not None or length != 13:
+                return None
+            width = int.from_bytes(payload[:4], "big")
+            height = int.from_bytes(payload[4:8], "big")
+            depth, color, compression, filtering, interlace = payload[8:]
+            depths = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8),
+                      4: (8, 16), 6: (8, 16)}
+            if (not 0 < width <= MAX_SIDE or not 0 < height <= MAX_SIDE
+                    or width * height > MAX_PIXELS or depth not in depths.get(color, ())
+                    or compression != 0 or filtering != 0 or interlace not in (0, 1)):
+                return None
+            header = width, height, depth, color, interlace
+        elif tag == b"PLTE":
+            if (palette_entries or idat_seen or transparency or color in (0, 4)
+                    or not 0 < length <= 768 or length % 3
+                    or (color == 3 and length // 3 > 1 << depth)):
+                return None
+            palette_entries = length // 3
+        elif tag == b"tRNS":
+            if transparency or idat_seen:
+                return None
+            if color == 3:
+                if not 0 < length <= palette_entries:
+                    return None
+            elif color in (0, 2):
+                if length != (2 if color == 0 else 6):
+                    return None
+                if any(int.from_bytes(payload[i:i + 2], "big") >= 1 << depth
+                       for i in range(0, length, 2)):
+                    return None
+            else:
+                return None
+            transparency = True
+        elif tag == b"IDAT":
+            if idat_finished or (color == 3 and not palette_entries):
+                return None
+            idat_seen = True
+            pixels.append(payload)
+        elif tag == b"IEND":
+            if length or end != len(data) or not idat_seen:
+                return None
+            if not valid_png_pixels(b"".join(pixels), header, palette_entries):
+                return None
+            output.extend(data[offset:end])
+            return bytes(output)
+        elif not tag[0] & 0x20:
+            return None  # Unknown critical chunks cannot be interpreted safely.
+        else:
+            keep = False
+        if keep:
+            output.extend(data[offset:end])
+        offset = end
+    return None  # Missing IEND, including a truncated download.
 
 
 def private_cache_dir():
@@ -158,10 +268,13 @@ def fetch(url):
         if not 0 < os.stat(name).st_size <= MAX_BYTES:
             return None
         with open(name, "rb") as artwork:
-            kind = image_kind(artwork.read(MAX_BYTES + 1))
-        if not kind:
+            sanitized = sanitize_png(artwork.read(MAX_BYTES + 1))
+        if sanitized is None:
             return None
-        result = Path(name).with_suffix("." + kind)
+        # Publish only the sanitized bytes, never the downloaded source.
+        with open(name, "wb") as artwork:
+            artwork.write(sanitized)
+        result = Path(name).with_suffix(".png")
         os.replace(name, result)
         prune_cache(base)
         return result.as_uri()

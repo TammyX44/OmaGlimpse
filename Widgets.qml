@@ -1152,11 +1152,21 @@ PanelWindow {
         var item = root.cardItemFor(id)
         if (item) cards.push({id:id, x:item.x, y:item.y, width:item.width, height:item.height, visible:item.visible})
       })
+      var mediaCard = root.cardItemFor("media")
+      var media = mediaCard ? mediaCard.widgetItem : null
+      var player = media ? media.activePlayer : null
       return JSON.stringify({configLoaded:root.configLoaded, saving:!!root.inFlightText,
         pending:!!root.pendingConfig, persistenceBlocked:root.persistenceBlocked,
         externalConflict:root.externalConflict, saveStatus:root.saveStatus, configError:root.configError,
         settingsLoaded:!!root.settingsPanel,
-        activeLayoutKey:root.activeLayoutKey, currentLayoutKey:root.currentLayoutKey, cards:cards})
+        activeLayoutKey:root.activeLayoutKey, currentLayoutKey:root.currentLayoutKey, cards:cards,
+        media: media ? {player:player ? player.dbusName : "", canSeek:media.canSeek,
+          positionSupported:player ? player.positionSupported : false,
+          lengthSupported:player ? player.lengthSupported : false,
+          nativePosition:player ? player.position : 0, length:media.trackLength,
+          livePosition:media.livePosition, freshTiming:!!media.timingSnapshot,
+          reportedPosition:media.timingSnapshot ? media.timingSnapshot.position : null,
+          seeking:media.seeking, samplingActive:media.samplingActive} : null})
     }
   }
 
@@ -1244,6 +1254,7 @@ PanelWindow {
       // should NOT trigger a relayout of all cards — that causes jitter.
       property bool hasSettled: false
       readonly property bool contentReady: cardLoader.status === Loader.Ready
+      readonly property var widgetItem: cardLoader.item
 
       // Smooth position animation for auto-positioned cards.
       // When relayout moves cards, they slide instead of jumping.

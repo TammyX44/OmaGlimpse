@@ -26,19 +26,19 @@ function parseMemoryLine(raw) {
 // Parse /proc/meminfo for detailed RAM info
 function parseMemInfo(raw) {
   var lines = String(raw || "").split("\n")
-  var info = { total: 0, available: 0, free: 0 }
+  var info = { total: NaN, available: NaN, free: 0 }
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i]
-    if (line.indexOf("MemTotal:") === 0) info.total = Number(line.split(/\s+/)[1]) || 0
-    else if (line.indexOf("MemAvailable:") === 0) info.available = Number(line.split(/\s+/)[1]) || 0
-    else if (line.indexOf("MemFree:") === 0) info.free = Number(line.split(/\s+/)[1]) || 0
+    if (line.indexOf("MemTotal:") === 0) info.total = Number(line.split(/\s+/)[1])
+    else if (line.indexOf("MemAvailable:") === 0) info.available = Number(line.split(/\s+/)[1])
+    else if (line.indexOf("MemFree:") === 0) info.free = Number(line.split(/\s+/)[1])
   }
-  info.valid = info.total > 0 && /(?:^|\n)MemAvailable:/.test(String(raw || ""))
+  info.valid = isFinite(info.total) && isFinite(info.available) && info.total > 0 && /(?:^|\n)MemAvailable:/.test(String(raw || ""))
     && info.available >= 0 && info.available <= info.total
   info.percent = info.valid ? (1 - info.available / info.total) * 100 : 0
-  info.usedKb = info.total - info.available
+  info.usedKb = info.valid ? info.total - info.available : 0
   info.usedGb = info.usedKb / 1024 / 1024
-  info.freeGb = info.available / 1024 / 1024
+  info.freeGb = info.valid ? info.available / 1024 / 1024 : 0
   info.totalGb = info.total / 1024 / 1024
   return info
 }
@@ -49,6 +49,10 @@ function parseCpuStat(raw) {
   for (var i = 0; i < lines.length; i++) {
     if (lines[i].indexOf("cpu ") === 0) {
       var cols = lines[i].split(/\s+/)
+      if (cols.length < 5) return null
+      for (var c = 1; c < Math.min(cols.length, 9); c++) {
+        if (!/^\d+$/.test(cols[c]) || !isFinite(Number(cols[c]))) return null
+      }
       // user, nice, system, idle, iowait, irq, softirq, steal
       return {
         user: Number(cols[1]) || 0,
@@ -66,7 +70,7 @@ function parseCpuStat(raw) {
 }
 
 function cpuBreakdown(prev, curr) {
-  if (!prev || !curr) return { user: 0, system: 0 }
+  if (!prev || !curr || cpuSnapshotPercent(prev, curr) === null) return { user: 0, system: 0 }
   var dTotal = (curr.user + curr.nice + curr.system + curr.idle + curr.iowait + curr.irq + curr.softirq + curr.steal)
              - (prev.user + prev.nice + prev.system + prev.idle + prev.iowait + prev.irq + prev.softirq + prev.steal)
   if (dTotal <= 0) return { user: 0, system: 0 }
@@ -160,25 +164,28 @@ function parseNetDev(raw) {
     if (iface === "lo") continue
     var fields = match[2].trim().split(/\s+/)
     if (fields.length < 9) continue
-    result[iface] = {
-      rxBytes: Number(fields[0]) || 0,
-      txBytes: Number(fields[8]) || 0
-    }
+    var rx = Number(fields[0]), tx = Number(fields[8])
+    if (!/^\d+$/.test(fields[0]) || !/^\d+$/.test(fields[8]) || !isFinite(rx) || !isFinite(tx)) continue
+    result[iface] = { rxBytes: rx, txBytes: tx }
   }
   return result
 }
 
 function parseDefaultInterface(raw) {
   var lines = String(raw || "").split("\n")
+  var selected = "", bestMetric = Infinity
   for (var i = 1; i < lines.length; i++) {
     var fields = lines[i].trim().split(/\s+/)
-    if (fields.length < 4 || fields[1] !== "00000000") continue
-    var flags = parseInt(fields[3], 16)
-    // Require a usable route (R + U flags), not just a stale table entry.
-    if (isFinite(flags) && (flags & 0x1) !== 0 && (flags & 0x2) !== 0)
-      return fields[0]
+    if (fields.length < 8 || fields[1] !== "00000000" || fields[7] !== "00000000") continue
+    var flags = parseInt(fields[3], 16), metric = Number(fields[6])
+    // Direct/default routes need UP, not necessarily GATEWAY (e.g. tunnels).
+    if (isFinite(flags) && (flags & 0x1) !== 0 && (flags & 0x200) === 0
+        && isFinite(metric) && metric >= 0 && metric < bestMetric) {
+      selected = fields[0]
+      bestMetric = metric
+    }
   }
-  return ""
+  return selected
 }
 
 function netSpeed(prev, curr, intervalMs) {
@@ -263,7 +270,7 @@ function parseDiskUsage(raw, mountFilter) {
     }
     if (skip) continue
     for (var sp = 0; sp < skipPrefixes.length; sp++) {
-      if (mount.indexOf(skipPrefixes[sp]) === 0 && mount !== "/") { skip = true; break }
+      if (mount === skipPrefixes[sp] || mount.indexOf(skipPrefixes[sp] + "/") === 0) { skip = true; break }
     }
     if (skip) continue
     // Skip duplicate devices (btrfs subvolumes share the same device)

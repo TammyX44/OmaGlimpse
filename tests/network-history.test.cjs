@@ -106,6 +106,10 @@ ShellRoot {
         card.samplingEnabled = true
         card.updateNet(raw("test0", 9000000, 9000000), 20000)
         compare(card.sampleReady, false)
+        card.visible = false
+        compare(findChild(card, "networkSampleTimer").running, false)
+        compare(card.prevTime, 0)
+        card.visible = true
         card.samplingMultiplier = 3
         compare(findChild(card, "networkSampleTimer").interval, 3000)
         compare(card.prevTime, 0)

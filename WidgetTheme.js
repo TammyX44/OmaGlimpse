@@ -89,8 +89,8 @@ function resolveTrackColor(config) {
 function resolveTempColor(temp) {
   // Semantic temperature colors: green=cool, yellow=warm, orange=hot, red=critical
   if (temp >= 85) return Color.urgent
-  if (temp >= 70) return "#e0af68"  // yellow
-  if (temp >= 55) return "#db9d4f"  // orange
+  if (temp >= 70) return "#db9d4f"  // orange
+  if (temp >= 55) return "#e0af68"  // yellow
   return "#9ece6a"                  // green
 }
 

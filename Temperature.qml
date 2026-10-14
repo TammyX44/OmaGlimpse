@@ -139,8 +139,9 @@ BorderSurface {
 
   function updateCpuTemp(raw) {
     if (!root.samplingActive) return
-    var n = Number(String(raw || "").trim())
-    if (!isFinite(n) || n <= 0) {
+    var value = String(raw === null || raw === undefined ? "" : raw).trim()
+    var n = Number(value)
+    if (!value || !isFinite(n) || n < -273150) {
       root.cpuAvailable = false
       root.cpuTempPath = ""
       root.recomputeAggregates()
@@ -176,8 +177,9 @@ BorderSurface {
   function updateFan(raw) {
     if (!root.samplingActive) return
     root.fanChecked = true
-    var n = Number(String(raw || "").trim())
-    root.fanRpm = (isFinite(n) && n >= 0) ? Math.round(n) : -1
+    var value = String(raw === null || raw === undefined ? "" : raw).trim()
+    var n = Number(value)
+    root.fanRpm = (value !== "" && isFinite(n) && n >= 0) ? Math.round(n) : -1
   }
 
   Process {

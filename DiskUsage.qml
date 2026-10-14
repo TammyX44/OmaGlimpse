@@ -68,12 +68,13 @@ BorderSurface {
   property bool stderrReady: false
   property bool exitReady: false
   property bool refreshQueued: false
+  property bool collectionActive: false
   property int sampleEpoch: 0
   property int pendingSampleEpoch: 0
 
   function refresh() {
     if (!root.samplingActive) return
-    if (diskProc.running) {
+    if (root.collectionActive) {
       root.refreshQueued = true
       return
     }
@@ -84,18 +85,19 @@ BorderSurface {
     root.stderrReady = false
     root.exitReady = false
     root.pendingSampleEpoch = root.sampleEpoch
-    if (!root.samplingActive) { root.refreshQueued = false; return }
-    if (root.pendingSampleEpoch !== root.sampleEpoch) {
-      root.refreshQueued = false
-      Qt.callLater(root.refresh)
-      return
-    }
+    root.collectionActive = true
     diskProc.running = true
   }
 
   function finishRefresh() {
     if (!root.stdoutReady || !root.stderrReady || !root.exitReady) return
+    if (!root.collectionActive) return
+    root.collectionActive = false
     root.exitReady = false
+    if (!root.samplingActive || root.pendingSampleEpoch !== root.sampleEpoch) {
+      if (root.samplingActive) Qt.callLater(root.refresh)
+      return
+    }
     root.hasLoaded = true
     if (root.pendingExitCode === 0) {
       root.updateDisks(root.pendingStdout)
@@ -149,13 +151,19 @@ BorderSurface {
   }
 
   Component.onCompleted: root.refresh()
-  onMountFilterChanged: Qt.callLater(function() { root.refresh() })
+  onMountFilterChanged: {
+    root.sampleEpoch += 1
+    root.disks = []
+    root.hasLoaded = false
+    root.errorMessage = ""
+    Qt.callLater(root.refresh)
+  }
   onSamplingActiveChanged: {
     root.sampleEpoch += 1
     if (root.samplingActive) Qt.callLater(root.refresh)
     else {
       root.refreshQueued = false
-      diskProc.running = false
+      if (diskProc.running) diskProc.signal(15)
     }
   }
 

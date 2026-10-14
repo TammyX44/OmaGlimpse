@@ -24,6 +24,7 @@ BorderSurface {
   property real gaugeDiameter: 120
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
+  readonly property bool samplingActive: root.samplingEnabled && root.visible
   readonly property int samplingInterval: Model.samplingInterval(root.refreshInterval, root.samplingMultiplier)
   property var snapshotCommand: ["python3", decodeURIComponent(String(Qt.resolvedUrl("process_snapshot.py")).replace(/^file:\/\//, ""))]
 
@@ -79,7 +80,7 @@ BorderSurface {
     root.errorMessage = ""
     root.refreshQueued = false
     if (proc.running) proc.signal(15)
-    if (root.componentReady && root.samplingEnabled) Qt.callLater(root.refresh)
+    if (root.componentReady && root.samplingActive) Qt.callLater(root.refresh)
   }
 
   function updateRanking() {
@@ -87,7 +88,7 @@ BorderSurface {
   }
 
   function refresh() {
-    if (!root.componentReady || !root.samplingEnabled) return
+    if (!root.componentReady || !root.samplingActive) return
     // Wait for exit AND both streams, including after pause/resume cancellation.
     if (root.collectionActive) {
       root.refreshQueued = true
@@ -110,7 +111,7 @@ BorderSurface {
     if (!root.collectionActive) return
     root.collectionActive = false
     collectorDeadline.stop()
-    if (root.samplingEnabled && root.requestGeneration === root.sampleGeneration) {
+    if (root.samplingActive && root.requestGeneration === root.sampleGeneration) {
       root.hasLoaded = true
       try {
         if (root.pendingExitCode !== 0)
@@ -174,7 +175,7 @@ BorderSurface {
     id: sampleTimer
     objectName: "processSamplingTimer"
     interval: root.samplingInterval
-    running: root.componentReady && root.samplingEnabled
+    running: root.componentReady && root.samplingActive
     repeat: true
     onTriggered: root.refresh()
   }
@@ -205,9 +206,9 @@ BorderSurface {
     root.componentReady = true
     root.refresh()
   }
-  onSamplingEnabledChanged: root.resetBaseline()
+  onSamplingActiveChanged: root.resetBaseline()
   onSamplingIntervalChanged: {
-    if (root.componentReady && root.samplingEnabled) {
+    if (root.componentReady && root.samplingActive) {
       sampleTimer.restart()
       Qt.callLater(root.refresh)
     }
@@ -246,7 +247,7 @@ BorderSurface {
         id: samplingNote
         width: parent.width
         textFormat: Text.PlainText
-        text: !root.samplingEnabled ? "Sampling paused"
+        text: !root.samplingActive ? "Sampling paused"
           : "CPU: 100% = one core" + (root.sampleReady ? "" : " · Measuring…")
         color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
         font.family: Style.font.family
@@ -352,7 +353,7 @@ BorderSurface {
 
         Text {
           width: parent.width
-          visible: root.samplingEnabled && !root.hasLoaded && root.processes.length === 0
+          visible: root.samplingActive && !root.hasLoaded && root.processes.length === 0
           textFormat: Text.PlainText
           text: "Loading process data..."
           color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
@@ -373,7 +374,7 @@ BorderSurface {
 
         Text {
           width: parent.width
-          visible: root.samplingEnabled && root.hasLoaded && root.errorMessage === "" && root.processes.length === 0
+          visible: root.samplingActive && root.hasLoaded && root.errorMessage === "" && root.processes.length === 0
           textFormat: Text.PlainText
           text: "No processes found"
           color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
