@@ -13,10 +13,10 @@
 </p>
 
 <p align="center">
-  <img src="assets/omaglimpse-desktop.png" alt="OmaGlimpse cards on one Omarchy desktop" width="900">
+  <img src="preview.png" alt="OmaGlimpse: theme-aware desktop widgets for Omarchy" width="900">
 </p>
 
-<p align="center"><em>All seven cards on one desktop in Omarchy's Catppuccin theme. The media card is playing an original demo audio sample.</em></p>
+<p align="center"><em>System Monitor, Media, Battery and Temperature in Omarchy's Japan Night theme. The media card is playing an original demo audio sample.</em></p>
 
 ## Highlights
 
@@ -46,10 +46,12 @@ Every card can also be moved, resized, given an opacity and, optionally, set to 
 
 <table>
   <tr>
-    <td align="center"><img src="assets/omaglimpse-desktop.png" alt="OmaGlimpse in Omarchy's Catppuccin theme" width="440"><br><sub>Catppuccin (dark)</sub></td>
-    <td align="center"><img src="assets/omaglimpse-light.png" alt="OmaGlimpse in Omarchy's Catppuccin Latte theme" width="440"><br><sub>Catppuccin Latte (light)</sub></td>
+    <td align="center"><img src="assets/omaglimpse-desktop.png" alt="A minimal four-card OmaGlimpse layout in Omarchy's Japan Night theme" width="440"><br><sub>Japan Night (dark)</sub></td>
+    <td align="center"><img src="assets/omaglimpse-light.png" alt="Network, disk, process and temperature cards in Omarchy's Catppuccin Latte theme" width="440"><br><sub>Catppuccin Latte (light)</sub></td>
   </tr>
 </table>
+
+<p align="center"><sub>Wallpapers in these screenshots are original artwork made for this repo (<code>assets/wallpapers/</code>).</sub></p>
 
 <p align="center">
   <img src="assets/omaglimpse-vs-btop.png" alt="OmaGlimpse beside btop on an Omarchy desktop" width="900"><br>
