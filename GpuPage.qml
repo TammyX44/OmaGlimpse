@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import "WidgetTokens.js" as T
 import "GpuModel.js" as Gpu
 
 // One complete carousel page. The outgoing page keeps its last device sample
@@ -46,7 +47,7 @@ Item {
       : root.compact ? (root.discoveryReady ? "None" : "…") : root.discoveryReady ? "No GPU detected" : "Detecting…"
     color: root.textColor
     font.family: Style.font.family
-    font.pixelSize: root.compact ? 10 : root.diameter < 64 ? 9 : 11
+    font.pixelSize: root.compact ? T.type.caption : T.type.body
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
   }
@@ -60,7 +61,7 @@ Item {
     text: root.device ? root.device.name : ""
     color: root.subTextColor
     font.family: Style.font.family
-    font.pixelSize: root.diameter < 64 ? 8 : 10
+    font.pixelSize: T.type.caption
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
   }
@@ -74,7 +75,7 @@ Item {
       ? (root.device.temp === null ? "Active" : Math.round(root.device.temp) + "°C") : root.device.status
     color: root.subTextColor
     font.family: Style.font.family
-    font.pixelSize: root.compact ? 10 : root.diameter < 64 ? 8 : 10
+    font.pixelSize: T.type.caption
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
   }

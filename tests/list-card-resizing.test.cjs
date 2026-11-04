@@ -16,7 +16,7 @@ test('list cards keep a readable row and support scrolling, focus, and resize re
     fs.mkdirSync(path.join(stage, 'runtime'), { mode: 0o700 })
     for (const dir of ['Commons', 'Ui']) fs.symlinkSync(path.join(shell, dir), path.join(stage, dir))
     for (const file of ['TopProcesses.qml', 'DiskUsage.qml', 'ProcessModel.js', 'WidgetModel.js',
-      'WidgetConfig.js', 'SamplingModel.js', 'WidgetSizing.js'])
+      'WidgetConfig.js', 'SamplingModel.js', 'WidgetSizing.js', 'WidgetTheme.js', 'WidgetTokens.js'])
       fs.symlinkSync(path.join(repo, file), path.join(stage, file))
     fs.writeFileSync(path.join(stage, 'shell.qml'), `
 import QtQuick

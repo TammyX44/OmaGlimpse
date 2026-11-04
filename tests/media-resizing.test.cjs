@@ -446,7 +446,7 @@ test('real Qt media layout fits compact dimensions and keeps playback usable', {
     for (const directory of ['Commons', 'Ui']) {
       fs.symlinkSync(path.join(shellDirectory, directory), path.join(stage, directory))
     }
-    for (const filename of ['ArtworkPlaceholder.qml', 'WidgetConfig.js', 'WidgetTheme.js', 'WidgetSizing.js', 'SamplingModel.js']) {
+    for (const filename of ['ArtworkPlaceholder.qml', 'WidgetConfig.js', 'WidgetTheme.js', 'WidgetTokens.js', 'WidgetSizing.js', 'SamplingModel.js']) {
       fs.copyFileSync(path.join(repository, filename), path.join(stage, filename))
     }
     const original = fs.readFileSync(path.join(repository, 'MediaWidget.qml'), 'utf8')

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import qs.Commons
+import "WidgetTokens.js" as T
 import qs.Ui
 
 // Compact inline toggle: label on left, small switch on right.
@@ -43,7 +44,7 @@ Item {
 
   Rectangle {
     anchors.fill: parent
-    radius: 5
+    radius: T.radius.control
     color: "transparent"
     border.width: root.activeFocus ? 1 : 0
     border.color: root.accentColor
@@ -52,14 +53,14 @@ Item {
   Row {
     id: contentRow
     anchors.fill: parent
-    spacing: 8
+    spacing: T.spacing.sm
 
     Text {
     textFormat: Text.PlainText
     text: root.label
     color: root.textColor
     font.family: Style.font.family
-    font.pixelSize: 12
+    font.pixelSize: T.type.title
     anchors.verticalCenter: parent.verticalCenter
     width: parent.width - track.width - parent.spacing
     elide: Text.ElideRight

@@ -8,6 +8,7 @@ import "WidgetConfig.js" as Config
 import "WidgetTheme.js" as Theme
 import "SamplingModel.js" as Sampling
 import "WidgetSizing.js" as Sizing
+import "WidgetTokens.js" as T
 
 // System monitor card: CPU, RAM, and GPU circular gauges.
 // Colors, refresh interval, and sub-widget visibility are config-driven.
@@ -21,7 +22,7 @@ BorderSurface {
   property color borderColor: Qt.rgba(1, 1, 1, 0.12)
   property color textColor: Color.foreground
   property color accentColor: Color.accent
-  property real cardRadius: 18
+  property real cardRadius: T.radius.card
   property real gaugeDiameter: 120
   property var gpuMonitor: null
   property bool editMode: false
@@ -43,8 +44,8 @@ BorderSurface {
   // height breakpoint made a taller card suddenly halve its ring diameter.
   readonly property real fullLayoutHeight: root.baseGaugeDiameter + 40 + (root.showGpu ? 78 : 40)
   readonly property bool compactLayout: root.requestedHeight > 0 && root.requestedHeight < root.fullLayoutHeight
-  readonly property int contentPadding: root.compactLayout ? 8 : 20
-  readonly property int gaugeSpacing: root.compactLayout ? 8 : 16
+  readonly property int contentPadding: root.compactLayout ? T.padding.compact : T.padding.card
+  readonly property int gaugeSpacing: root.compactLayout ? T.spacing.sm : T.spacing.lg
   readonly property real minimumCardHeight: root.showGpu ? 110 : 80
   readonly property int visibleGaugeCount: (root.showCpu ? 1 : 0) + (root.showRam ? 1 : 0) + (root.showGpu ? 1 : 0)
   readonly property real baseGaugeDiameter: {
@@ -67,7 +68,7 @@ BorderSurface {
   readonly property real naturalCardHeight: root.visibleGaugeCount === 0 ? 80 : Math.max(80, root.baseGaugeDiameter + (root.showGpu ? 78
     : 8 + gaugeFont.height + 4 + gaugeFont.height) + 40)
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
-  FontMetrics { id: gaugeFont; font.family: Style.font.family; font.pixelSize: 10 }
+  FontMetrics { id: gaugeFont; font.family: Style.font.family; font.pixelSize: T.type.label }
 
 
   // --- CPU data ---
@@ -163,9 +164,9 @@ BorderSurface {
     text: "No system metrics enabled"
     color: Theme.resolveMutedColor(root.textColor)
     font.family: Style.font.family
-    font.pixelSize: 12
+    font.pixelSize: T.type.title
     horizontalAlignment: Text.AlignHCenter
-    width: Math.max(0, parent.width - 40)
+    width: Math.max(0, parent.width - 2 * T.padding.card)
   }
 
 

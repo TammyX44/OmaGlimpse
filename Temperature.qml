@@ -9,6 +9,7 @@ import "WidgetTheme.js" as Theme
 import "GpuModel.js" as Gpu
 import "SamplingModel.js" as Sampling
 import "WidgetSizing.js" as Sizing
+import "WidgetTokens.js" as T
 
 // Temperature sensors card: flat list layout.
 // Large hottest temp + status on the left, vertical divider,
@@ -22,7 +23,7 @@ BorderSurface {
   property color borderColor: Qt.rgba(1, 1, 1, 0.12)
   property color textColor: Color.foreground
   property color accentColor: Color.accent
-  property real cardRadius: 18
+  property real cardRadius: T.radius.card
   property real gaugeDiameter: 120
   property var gpuMonitor: null
   property bool samplingEnabled: true
@@ -41,10 +42,10 @@ BorderSurface {
   readonly property real minimumCardHeight: 80
   readonly property bool shortLayout: root.requestedHeight > 0 && root.requestedHeight < 100
   readonly property bool compactLayout: root.width <= 240 || root.shortLayout
-  readonly property int contentSpacing: root.compactLayout ? 8 : 18
-  readonly property int contentPadding: root.shortLayout ? 8 : 16
-  readonly property int heroFontSize: root.shortLayout ? 28 : root.compactLayout ? 34 : 38
-  readonly property int detailFontSize: root.compactLayout ? 11 : 12
+  readonly property int contentSpacing: root.compactLayout ? T.spacing.sm : T.spacing.lg
+  readonly property int contentPadding: root.shortLayout ? T.padding.compact : T.padding.cardSmall
+  readonly property int heroFontSize: root.shortLayout ? T.type.heroShort : root.compactLayout ? T.type.heroCompact : T.type.hero
+  readonly property int detailFontSize: root.compactLayout ? T.type.body : T.type.title
 
   readonly property real widgetCardWidth: Number(root.widgetCfg.cardWidth) || 0
   readonly property real widgetGaugeDiameter: Number(root.widgetCfg.gaugeDiameter) || root.gaugeDiameter
@@ -263,12 +264,12 @@ BorderSurface {
     Column {
       id: heroColumn
       width: (content.width - 1 - 2 * content.spacing) * 0.44
-      spacing: 4
+      spacing: T.spacing.xs
       anchors.verticalCenter: parent.verticalCenter
 
       Row {
         width: parent.width
-        spacing: 2
+        spacing: T.spacing.xxs
         anchors.horizontalCenter: parent.horizontalCenter
 
         Text {
@@ -285,7 +286,7 @@ BorderSurface {
           fontSizeMode: Text.Fit
           minimumPixelSize: 20
           horizontalAlignment: Text.AlignRight
-          font.weight: Font.DemiBold
+          font.weight: T.weight.semibold
         }
 
         Text {
@@ -295,10 +296,10 @@ BorderSurface {
           text: root.unitSymbol
           color: Theme.resolveMutedColor(root.textColor)
           font.family: Style.font.family
-          font.pixelSize: root.compactLayout ? 14 : 16
-          font.weight: Font.Medium
+          font.pixelSize: root.compactLayout ? T.type.unitCompact : T.type.unit
+          font.weight: T.weight.medium
           anchors.top: heroValue.top
-          anchors.topMargin: root.compactLayout ? 4 : 5
+          anchors.topMargin: root.compactLayout ? T.spacing.xs : 5
         }
       }
 
@@ -307,9 +308,9 @@ BorderSurface {
         text: root.hottestSensor ? root.tempStatus : "NO DATA"
         color: root.tempColor
         font.family: Style.font.family
-        font.pixelSize: root.compactLayout ? 9 : 10
-        font.weight: Font.Medium
-        font.letterSpacing: root.compactLayout ? 1 : 1.5
+        font.pixelSize: T.type.label
+        font.weight: T.weight.medium
+        font.letterSpacing: root.compactLayout ? T.tracking.tight : T.tracking.wide
         anchors.horizontalCenter: parent.horizontalCenter
         Behavior on color { ColorAnimation { duration: 300 } }
       }
@@ -326,13 +327,13 @@ BorderSurface {
     // --- Right: sensor rows with color dots ---
     Column {
       width: content.width - heroColumn.width - 1 - 2 * content.spacing
-      spacing: root.shortLayout ? 4 : 7
+      spacing: root.shortLayout ? T.spacing.xs : T.spacing.sm
       anchors.verticalCenter: parent.verticalCenter
 
       // CPU row
       Row {
         width: parent.width
-        spacing: root.compactLayout ? 6 : 8
+        spacing: root.compactLayout ? T.spacing.xs : T.spacing.sm
         visible: root.sensorList.indexOf("cpu") !== -1 && root.cpuAvailable
         Rectangle {
           width: 6; height: 6; radius: 3
@@ -348,14 +349,14 @@ BorderSurface {
           color: root.textColor
           font.family: Style.font.family
           font.pixelSize: root.detailFontSize
-          font.weight: Font.Medium
+          font.weight: T.weight.medium
         }
       }
 
       // GPU row
       Row {
         width: parent.width
-        spacing: root.compactLayout ? 6 : 8
+        spacing: root.compactLayout ? T.spacing.xs : T.spacing.sm
         visible: root.sensorList.indexOf("gpu") !== -1 && root.gpuAvailable
         Rectangle {
           width: 6; height: 6; radius: 3
@@ -371,14 +372,14 @@ BorderSurface {
           color: root.textColor
           font.family: Style.font.family
           font.pixelSize: root.detailFontSize
-          font.weight: Font.Medium
+          font.weight: T.weight.medium
         }
       }
 
       // Fan row
       Row {
         width: parent.width
-        spacing: root.compactLayout ? 6 : 8
+        spacing: root.compactLayout ? T.spacing.xs : T.spacing.sm
         visible: root.showFan && root.fanRpm >= 0
         Rectangle {
           width: 6; height: 6; radius: 3
@@ -393,7 +394,7 @@ BorderSurface {
           color: root.textColor
           font.family: Style.font.family
           font.pixelSize: root.detailFontSize
-          font.weight: Font.Medium
+          font.weight: T.weight.medium
         }
       }
     }

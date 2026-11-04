@@ -16,7 +16,7 @@ test('Battery and Network gauge breakpoints preserve monotonic rings and Auto fo
     fs.mkdirSync(path.join(stage, 'runtime'), { mode: 0o700 })
     for (const dir of ['Commons', 'Ui']) fs.symlinkSync(path.join(shell, dir), path.join(stage, dir))
     for (const file of ['BatteryWidget.qml', 'NetworkSpeed.qml', 'CircularGauge.qml',
-      'WidgetConfig.js', 'WidgetTheme.js', 'WidgetModel.js', 'SamplingModel.js',
+      'WidgetConfig.js', 'WidgetTheme.js', 'WidgetTokens.js', 'WidgetModel.js', 'SamplingModel.js',
       'WidgetSizing.js', 'NetworkHistory.js'])
       fs.symlinkSync(path.join(repo, file), path.join(stage, file))
     fs.writeFileSync(path.join(stage, 'shell.qml'), `

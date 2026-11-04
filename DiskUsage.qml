@@ -8,6 +8,8 @@ import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "SamplingModel.js" as Sampling
 import "WidgetSizing.js" as Sizing
+import "WidgetTheme.js" as Theme
+import "WidgetTokens.js" as T
 
 // Disk usage card: per-mount usage bars with size/used/avail.
 BorderSurface {
@@ -19,7 +21,7 @@ BorderSurface {
   property color borderColor: Qt.rgba(1, 1, 1, 0.12)
   property color textColor: Color.foreground
   property color accentColor: Color.accent
-  property real cardRadius: 18
+  property real cardRadius: T.radius.card
   property real gaugeDiameter: 120
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
@@ -43,19 +45,19 @@ BorderSurface {
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
   radius: root.cardRadius
-  padding: root.compactHeight ? 8 : 20
+  padding: root.compactHeight ? T.padding.compact : T.padding.card
 
   width: widgetCardWidth > 0 ? widgetCardWidth : 300
   // Keep Auto's original measurement independent of the clipped list height.
   readonly property real naturalCardHeight: heading.implicitHeight + listContent.implicitHeight
-    + (listContent.implicitHeight > 0 ? 10 : 0) + 40
-  readonly property real minimumCardHeight: Math.max(80, 16 + heading.implicitHeight + 4
+    + (listContent.implicitHeight > 0 ? T.header.gap : 0) + 2 * T.padding.card
+  readonly property real minimumCardHeight: Math.max(80, 2 * T.padding.compact + heading.implicitHeight + 4
     + diskNameMetrics.height + 8 + 6 + diskDetailMetrics.height)
   readonly property bool compactHeight: root.height < root.naturalCardHeight
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
 
-  FontMetrics { id: diskNameMetrics; font.family: Style.font.family; font.pixelSize: 11; font.bold: true }
-  FontMetrics { id: diskDetailMetrics; font.family: Style.font.family; font.pixelSize: 9 }
+  FontMetrics { id: diskNameMetrics; font.family: Style.font.family; font.pixelSize: T.type.body; font.weight: T.weight.semibold }
+  FontMetrics { id: diskDetailMetrics; font.family: Style.font.family; font.pixelSize: T.type.caption }
 
 
   property var disks: []
@@ -173,8 +175,8 @@ BorderSurface {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
-    anchors.leftMargin: 20
-    anchors.rightMargin: 20
+    anchors.leftMargin: T.padding.card
+    anchors.rightMargin: T.padding.card
     height: Math.min(heading.implicitHeight + listViewport.anchors.topMargin + listContent.implicitHeight,
       Math.max(0, root.height - 2 * root.padding))
 
@@ -184,16 +186,17 @@ BorderSurface {
       text: "DISK USAGE"
       color: root.textColor
       font.family: Style.font.family
-      font.pixelSize: 12
-      font.bold: true
-      font.letterSpacing: 1.5
+      font.pixelSize: T.type.title
+      font.weight: T.weight.bold
+      font.letterSpacing: T.tracking.wide
     }
 
     Flickable {
       id: listViewport
       objectName: "listCardViewport"
       anchors.top: heading.bottom
-      anchors.topMargin: listContent.implicitHeight > 0 ? (root.compactHeight ? 4 : 10) : 0
+      anchors.topMargin: listContent.implicitHeight > 0
+        ? (root.compactHeight ? T.header.gapCompact : T.header.gap) : 0
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.bottom: parent.bottom
@@ -235,7 +238,7 @@ BorderSurface {
         policy: Controls.ScrollBar.AsNeeded
         contentItem: Rectangle {
           implicitWidth: 6
-          radius: 3
+          radius: T.radius.bar
           color: root.textColor
           opacity: listViewport.activeFocus ? 0.7 : 0.4
         }
@@ -244,16 +247,16 @@ BorderSurface {
       Column {
         id: listContent
         width: listViewport.width
-        spacing: 10
+        spacing: T.list.rowGap
 
         Text {
           width: parent.width
           visible: !root.hasLoaded && root.disks.length === 0
           textFormat: Text.PlainText
           text: "Loading disk usage..."
-          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+          color: Theme.resolveMutedColor(root.textColor)
           font.family: Style.font.family
-          font.pixelSize: 11
+          font.pixelSize: T.type.body
         }
 
         Text {
@@ -263,7 +266,7 @@ BorderSurface {
           text: root.errorMessage
           color: Color.urgent
           font.family: Style.font.family
-          font.pixelSize: 11
+          font.pixelSize: T.type.body
           wrapMode: Text.Wrap
         }
 
@@ -272,9 +275,9 @@ BorderSurface {
           visible: root.hasLoaded && root.errorMessage === "" && root.disks.length === 0
           textFormat: Text.PlainText
           text: root.mountFilter.length > 0 ? "No matching filesystems" : "No filesystems found"
-          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+          color: Theme.resolveMutedColor(root.textColor)
           font.family: Style.font.family
-          font.pixelSize: 11
+          font.pixelSize: T.type.body
         }
 
         Repeater {
@@ -286,7 +289,7 @@ BorderSurface {
             required property int index
 
             width: content.width
-            spacing: 4
+            spacing: T.spacing.xs
 
             Row {
               width: parent.width
@@ -297,8 +300,8 @@ BorderSurface {
                 text: diskRow.modelData.mount
                 color: root.textColor
                 font.family: Style.font.family
-                font.pixelSize: 11
-                font.bold: true
+                font.pixelSize: T.type.body
+                font.weight: T.weight.semibold
                 elide: Text.ElideRight
                 width: parent.width * 0.5
               }
@@ -306,9 +309,9 @@ BorderSurface {
               Text {
                 textFormat: Text.PlainText
                 text: diskRow.modelData.used + " / " + diskRow.modelData.size
-                color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+                color: Theme.resolveMutedColor(root.textColor)
                 font.family: Style.font.family
-                font.pixelSize: 10
+                font.pixelSize: T.type.caption
                 horizontalAlignment: Text.AlignRight
                 width: parent.width * 0.5
               }
@@ -317,18 +320,18 @@ BorderSurface {
             // Usage bar
             Item {
               width: parent.width
-              height: 6
+              height: T.list.barHeight
 
               Rectangle {
                 anchors.fill: parent
-                radius: 3
+                radius: T.radius.bar
                 color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.08)
               }
 
               Rectangle {
                 width: parent.width * (diskRow.modelData.percent / 100)
                 height: parent.height
-                radius: 3
+                radius: T.radius.bar
                 color: diskRow.modelData.percent > 90 ? Color.urgent : root.accentColor
 
                 Behavior on width {
@@ -340,9 +343,9 @@ BorderSurface {
             Text {
               textFormat: Text.PlainText
               text: diskRow.modelData.percent + "% used · " + diskRow.modelData.avail + " free"
-              color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.4)
+              color: Theme.resolveDimColor(root.textColor)
               font.family: Style.font.family
-              font.pixelSize: 9
+              font.pixelSize: T.type.caption
             }
           }
         }
@@ -356,7 +359,7 @@ BorderSurface {
       color: "transparent"
       border.width: 1
       border.color: root.accentColor
-      radius: 3
+      radius: T.radius.bar
     }
   }
 }
