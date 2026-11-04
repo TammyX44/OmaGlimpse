@@ -12,6 +12,8 @@ for file in "$repo"/*.qml; do cp "$file" "$stage/${file##*/}"; done
 for dir in widgets components settings lib scripts; do cp -R "$repo/$dir" "$stage/$dir"; done
 cp "$repo/tests/persistence-ui-smoke.qml" "$stage/shell.qml"
 # Optional before-fix comparison; extracts only into the disposable stage.
+# PERSISTENCE_TEST_REF only works for refs after the folder restructure (b8d8ebd):
+# older refs keep Widgets.qml beside flat card files and its imports will not resolve here.
 if [ -n "${PERSISTENCE_TEST_REF:-}" ]; then
   git -C "$repo" archive "$PERSISTENCE_TEST_REF" Widgets.qml | tar -x -C "$stage"
 fi

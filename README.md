@@ -16,7 +16,7 @@
   <img src="preview.png" alt="OmaGlimpse: theme-aware desktop widgets for Omarchy" width="900">
 </p>
 
-<p align="center"><em>System Monitor, Media, Battery and Temperature in Omarchy's Japan Night theme. The media card is playing an original demo audio sample.</em></p>
+<p align="center"><em>System Monitor, Media, Battery and Temperature in the Japan Night community theme. The media card is playing an original demo audio sample.</em></p>
 
 ## Highlights
 
@@ -46,7 +46,7 @@ Every card can also be moved, resized, given an opacity and, optionally, set to 
 
 <table>
   <tr>
-    <td align="center"><img src="assets/omaglimpse-desktop.png" alt="A minimal four-card OmaGlimpse layout in Omarchy's Japan Night theme" width="440"><br><sub>Japan Night (dark)</sub></td>
+    <td align="center"><img src="assets/omaglimpse-desktop.png" alt="A minimal four-card OmaGlimpse layout in the Japan Night community theme" width="440"><br><sub>Japan Night (dark)</sub></td>
     <td align="center"><img src="assets/omaglimpse-light.png" alt="Network, disk, process and temperature cards in Omarchy's Catppuccin Latte theme" width="440"><br><sub>Catppuccin Latte (light)</sub></td>
   </tr>
 </table>
@@ -102,7 +102,7 @@ If the shell still shows the previous widget afterwards, run `omarchy restart sh
 
 ### Uninstall
 
-Run `omarchy plugin remove` and select OmaGlimpse from the list. Omarchy disables the plugin and removes its folder. Your preferences in `~/.config/omarchy/tammy-widgets.json` are left in place; delete that file yourself if you no longer want them.
+Run `omarchy plugin remove` and select `io.github.tammyx44.omaglimpse` from the list. Omarchy disables the plugin and removes its folder. Your preferences in `~/.config/omarchy/tammy-widgets.json` are left in place; delete that file yourself if you no longer want them.
 
 ## Configuration
 
@@ -246,11 +246,12 @@ sh tests/run-safe-textfield-qml-tests.sh
 sh tests/run-sizing-qml-tests.sh
 LIST_CARD_QML_TESTS=1 node --test tests/list-card-resizing.test.cjs
 node --test tests/media-resizing.test.cjs
+GAUGE_QML_TESTS=1 node --test tests/gauge-breakpoints.test.cjs
 ```
 
 The QML checks need an installed Omarchy shell, Quickshell and QtTest. Set `OMARCHY_SHELL_DIR` if the shell is not at `/usr/share/omarchy/shell`. They use temporary settings and simulated Intel, NVIDIA and AMD telemetry, and they leave your desktop settings untouched.
 
-> **The layout suite needs a running Wayland session.** It loads the real desktop and settings panel types, opens a temporary synthetic preview window and uses an isolated settings file. The other QML suites run offscreen. Python collector runtime checks skip on systems without the required QML modules.
+> **The layout and persistence suites need a running Wayland session.** They load the real desktop types, open a temporary window and use an isolated settings file. The other QML suites run offscreen. Python collector runtime checks skip on systems without the required QML modules.
 
 <details>
 <summary><strong>Benchmark note</strong></summary>

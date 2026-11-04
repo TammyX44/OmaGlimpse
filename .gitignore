@@ -13,3 +13,6 @@ tammy-widgets.json
 *.swp
 *.swo
 *~
+
+# Merge/patch leftovers
+*.orig
