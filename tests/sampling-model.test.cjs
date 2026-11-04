@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const model = require('../SamplingModel.js')
+const model = require('../lib/SamplingModel.js')
 
 test('sampling intervals slow down, reject invalid values, and fit QML int', () => {
   assert.equal(model.interval(2000, 3), 6000)

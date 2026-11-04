@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls as Controls
 import qs.Commons
-import "GpuModel.js" as Gpu
-import "WidgetTokens.js" as T
+import "../lib/GpuModel.js" as Gpu
+import "../lib/WidgetTokens.js" as T
 
 // Fixed-size GPU slot: names and availability never resize the system card.
 Item {

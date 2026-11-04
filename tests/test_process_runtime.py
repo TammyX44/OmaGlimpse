@@ -47,7 +47,8 @@ import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Io
-import "." as Plugin
+import "widgets"
+import "components"
 
 ShellRoot {
   id: root
@@ -55,7 +56,7 @@ ShellRoot {
   property int accepted: 0
   function path(name) { return decodeURIComponent(String(Qt.resolvedUrl(name)).replace(/^file:\/\//, "")) }
   Timer { interval: 100; running: true; onTriggered: root.startTests = true }
-  Plugin.SamplingPolicy { id: policy; monitoringEnabled: false }
+  SamplingPolicy { id: policy; monitoringEnabled: false }
   FileView { id: modeFile; path: root.path("mode"); watchChanges: false; printErrors: false }
   FileView { id: counterFile; path: root.path("counter"); watchChanges: false; printErrors: false }
   Process {
@@ -65,7 +66,7 @@ ShellRoot {
   FloatingWindow {
     visible: true
     implicitWidth: 350; implicitHeight: 350
-    Plugin.TopProcesses {
+    TopProcesses {
       id: card
       samplingEnabled: false
       config: ({ widgets: { topProcesses: { refreshInterval: 60000, processCount: 2, sortBy: "cpu" } } })
@@ -286,7 +287,7 @@ ShellRoot {
         compare(card.previousSnapshot, null)
       }
       function test_z_real_proc_cpu_interval() {
-        card.snapshotCommand = ["python3", root.path("process_snapshot.py")]
+        card.snapshotCommand = ["python3", root.path("scripts/process_snapshot.py")]
         burn.running = true
         tryVerify(function() { return Number(burn.processId) > 0 }, 1000)
         collectFirst()
@@ -315,11 +316,10 @@ class ProcessRuntimeTest(unittest.TestCase):
             stage = Path(directory)
             for module in ("Commons", "Ui"):
                 (stage / module).symlink_to(shell / module, target_is_directory=True)
-            # Copy the assigned component plus its dependencies. The running
-            # desktop and source checkout are never used as a test config.
-            for name in ("TopProcesses.qml", "ProcessModel.js", "WidgetConfig.js", "process_snapshot.py",
-                         "SamplingPolicy.qml", "SamplingModel.js", "WidgetSizing.js"):
-                shutil.copyfile(REPO / name, stage / name)
+            # Copy the plugin folders the card needs. The running desktop and
+            # source checkout are never used as a test config.
+            for name in ("widgets", "components", "lib", "scripts"):
+                shutil.copytree(REPO / name, stage / name)
             (stage / "shell.qml").write_text(QML)
             (stage / "fixture.py").write_text(FIXTURE)
             (stage / "mode").write_text("ok\n")

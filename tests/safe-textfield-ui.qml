@@ -1,7 +1,7 @@
 import QtQuick
 import QtTest
 import Quickshell
-import "." as Plugin
+import "components"
 
 ShellRoot {
   id: harness
@@ -15,14 +15,14 @@ ShellRoot {
       id: preview
       anchors.fill: parent
       Rectangle { anchors.fill: parent; color: "#151821" }
-      Plugin.SafeTextField {
+      SafeTextField {
         id: field
         x: 24; y: 24; width: 300; height: 36
         maximumLength: 48
         placeholderText: "e.g. Work or Gaming"
         Accessible.name: "New layout name"
       }
-      Plugin.SafeTextField {
+      SafeTextField {
         id: coordinate
         x: 24; y: 90; width: 78; height: 28
         maximumLength: 5
@@ -33,7 +33,7 @@ ShellRoot {
         horizontalAlignment: Text.AlignHCenter
         Accessible.name: "Widget X position"
       }
-      Plugin.SafeTextField {
+      SafeTextField {
         id: colorField
         x: 24; y: 144; width: 160; height: 36
         maximumLength: 9

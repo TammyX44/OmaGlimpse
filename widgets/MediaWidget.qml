@@ -4,11 +4,11 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
-import "WidgetTokens.js" as T
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTokens.js" as T
 
 // Media now-playing card.
 // Player selection follows the same priority pattern as Omarchy's
@@ -203,7 +203,7 @@ BorderSurface {
     }
     if (!/^https:\/\//i.test(url)) return
 
-    var helper = decodeURIComponent(String(Qt.resolvedUrl("fetch_album_art.py")).replace(/^file:\/\//, ""))
+    var helper = decodeURIComponent(String(Qt.resolvedUrl("../scripts/fetch_album_art.py")).replace(/^file:\/\//, ""))
     var process = artworkProcessComponent.createObject(root, {
       requestKey: root.artworkRequestKey,
       command: ["python3", helper, url]
@@ -313,7 +313,7 @@ BorderSurface {
 
   function requestTiming() {
     if (!root.samplingActive || !root.hasMedia || root.seeking || root.timingProcess) return
-    var helper = decodeURIComponent(String(Qt.resolvedUrl("media_snapshot.py")).replace(/^file:\/\//, ""))
+    var helper = decodeURIComponent(String(Qt.resolvedUrl("../scripts/media_snapshot.py")).replace(/^file:\/\//, ""))
     var process = timingProcessComponent.createObject(root, {
       requestKey: root.timingKey, requestEpoch: root.timingEpoch,
       command: ["python3", helper, root.playerKey(root.activePlayer)]

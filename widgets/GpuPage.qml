@@ -1,7 +1,8 @@
 import QtQuick
 import qs.Commons
-import "WidgetTokens.js" as T
-import "GpuModel.js" as Gpu
+import "../lib/WidgetTokens.js" as T
+import "../lib/GpuModel.js" as Gpu
+import "../components"
 
 // One complete carousel page. The outgoing page keeps its last device sample
 // while the incoming page moves into place, so names and readings travel together.

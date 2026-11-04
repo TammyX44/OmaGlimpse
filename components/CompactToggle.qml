@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import qs.Commons
-import "WidgetTokens.js" as T
+import "../lib/WidgetTokens.js" as T
 import qs.Ui
 
 // Compact inline toggle: label on left, small switch on right.

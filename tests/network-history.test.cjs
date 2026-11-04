@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const history = require('../NetworkHistory.js')
+const history = require('../lib/NetworkHistory.js')
 
 test('scale rises immediately for either channel and decays by elapsed time', () => {
   assert.equal(history.nextScale(65536, 1000000, 2000000, 1000), 2400000)
@@ -47,7 +47,7 @@ test('network widget runtime: sampling lifecycle, gaps, scale, and narrow fit', 
   const repo = path.resolve(__dirname, '..')
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'omawidgets-network-'))
   try {
-    for (const name of fs.readdirSync(repo).filter(name => /\.(qml|js)$/.test(name)))
+    for (const name of ['widgets', 'components', 'lib', 'scripts'])
       fs.symlinkSync(path.join(repo, name), path.join(stage, name))
     const shellDir = process.env.OMARCHY_SHELL_DIR || '/usr/share/omarchy/shell'
     for (const name of ['Commons', 'Ui']) fs.symlinkSync(path.join(shellDir, name), path.join(stage, name))
@@ -56,7 +56,7 @@ test('network widget runtime: sampling lifecycle, gaps, scale, and narrow fit', 
 import QtQuick
 import QtTest
 import Quickshell
-import "." as Plugin
+import "widgets"
 ShellRoot {
   id: root
   property bool ready: false
@@ -64,7 +64,7 @@ ShellRoot {
   FloatingWindow {
     visible: true
     implicitWidth: 320; implicitHeight: 400
-    Plugin.NetworkSpeed {
+    NetworkSpeed {
       id: card
       samplingEnabled: false
       config: ({widgets: {networkSpeed: {interface: "test0", refreshInterval: 1000, cardWidth: 180}}})

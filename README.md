@@ -32,17 +32,14 @@ The first four cards are enabled by default. Enable Network Speed, Disk Usage, a
 
 | Path | Purpose |
 | --- | --- |
-| `manifest.json`, `Widgets.qml` | Declare the Omarchy plugin and coordinate the desktop overlay, card layout, settings, and IPC. |
-| `*Widget.qml`, `SystemMonitor.qml`, `Temperature.qml`, `TopProcesses.qml`, `NetworkSpeed.qml`, `DiskUsage.qml` | Render the seven live cards and read their data sources. |
-| `SettingsPanel.qml`, `WidgetDropdown.qml`, `WidgetContextMenu.qml`, `SettingsButton.qml` | Provide the settings panel, per-card controls, context menu, and bar button. |
-| `WidgetConfig.js`, `WidgetModel.js`, `WidgetTheme.js`, `WidgetTokens.js`, `CircularGauge.qml`, `CompactToggle.qml` | Validate preferences, parse readings, follow theme colors, share type/spacing/radius tokens, and share UI controls. |
-| `ArtworkPlaceholder.qml`, `fetch_album_art.py` | Draw a theme-matched media placeholder and safely fetch bounded remote cover images. |
-| `SafeTextField.qml`, `bounded-clipboard.py` | Keep native clipboard probing disabled and handle explicit text pastes through a byte- and time-limited helper. |
-| `SamplingPolicy.qml`, `SamplingModel.js` | Coordinate lock, display power and power-saver sampling across the cards. |
-| `LayoutProfiles.js`, `WidgetLayout.js`, `LayoutEditorControls.qml` | Remember monitor and named layouts, snap cards, and provide the layout editor. |
-| `WidgetSizing.js`, `WidgetSizeControls.qml` | Size cards without cropping their content and provide independent width/height controls with Auto resets. |
-| `ProcessModel.js`, `process_snapshot.py`, `NetworkHistory.js` | Calculate interval process CPU readings and bounded network history and scaling. |
+| `manifest.json`, `Widgets.qml`, `SettingsButton.qml` | Declare the Omarchy plugin, coordinate the desktop overlay, card layout, settings, and IPC (`Widgets.qml`), and provide the bar button (`SettingsButton.qml`). |
+| `widgets/` | The seven live cards (`SystemMonitor`, `BatteryWidget`, `MediaWidget`, `TopProcesses`, `DiskUsage`, `NetworkSpeed`, `Temperature`) and their card-specific parts: `GpuMonitor`, `GpuDevice`, `GpuGauge`, `GpuPage`, and `ArtworkPlaceholder`. |
+| `components/` | Shared UI and overlay pieces: `CircularGauge`, `CompactToggle`, `WidgetDropdown`, `WidgetContextMenu`, `SafeTextField` (keeps native clipboard probing disabled), and `SamplingPolicy` (coordinates lock, display power and power-saver sampling across the cards). |
+| `settings/` | The settings panel (`SettingsPanel.qml`) and the controls only it uses: `LayoutEditorControls` (layout editor) and `WidgetSizeControls` (independent width/height with Auto resets). |
+| `lib/` | Pure JavaScript modules: `WidgetConfig` (validate preferences), `WidgetModel` (parse readings), `WidgetTheme` (follow theme colors), `WidgetTokens` (type/spacing/radius tokens), `WidgetSizing` (size cards without cropping), `WidgetLayout` and `LayoutProfiles` (snap cards, remember monitor and named layouts), `SamplingModel`, `ProcessModel` (interval process CPU readings), `NetworkHistory` (bounded history and scaling), and `GpuModel`. |
+| `scripts/` | Helper processes started by the cards: `process_snapshot.py`, `media_snapshot.py`, `fetch_album_art.py` (safely fetches bounded remote cover images), `bounded-clipboard.py` (byte- and time-limited text paste), and `gpu-discover.sh`. |
 | `tests/`, `.github/workflows/` | Check widget behavior and manifest validity locally and in CI. |
+| `docs/` | Project notes such as the widget audit. |
 | `assets/`, `preview.png` | Hold the approved screenshots, demo video, and marketplace preview. |
 
 ## Requirements

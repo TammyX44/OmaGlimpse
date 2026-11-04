@@ -1,8 +1,8 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 global.Quickshell = { env: () => '/tmp/widgets-test' }
-const config = require('../WidgetConfig.js')
-const theme = require('../WidgetTheme.js')
+const config = require('../lib/WidgetConfig.js')
+const theme = require('../lib/WidgetTheme.js')
 
 test('battery power defaults on and explicit false survives', () => {
   assert.equal(config.defaultConfig().widgets.battery.showPower, true)

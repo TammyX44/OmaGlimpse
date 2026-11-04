@@ -1,9 +1,9 @@
 const {test} = require('node:test')
 const assert = require('node:assert/strict')
 global.Quickshell = {env: () => '/tmp/test'}
-const Config = require('../WidgetConfig.js')
-const Profiles = require('../LayoutProfiles.js')
-const Layout = require('../WidgetLayout.js')
+const Config = require('../lib/WidgetConfig.js')
+const Profiles = require('../lib/LayoutProfiles.js')
+const Layout = require('../lib/WidgetLayout.js')
 test('monitor topology uses geometry and scaling, independent of enumeration order', () => {
   const a = {name:'eDP-1',width:1280,height:720,scale:1.5,x:0,y:0}
   const b = {name:'DP-1',width:1920,height:1080,scale:1,x:1280,y:0}

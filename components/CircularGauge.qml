@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons
-import "WidgetTokens.js" as T
+import "../lib/WidgetTokens.js" as T
 
 // Circular ring gauge — reusable component for all widget gauges.
 // Thin ring style matching macOS-style widget reference:

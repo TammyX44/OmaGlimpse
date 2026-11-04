@@ -3,12 +3,13 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "WidgetModel.js" as Model
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
-import "WidgetTokens.js" as T
+import "../lib/WidgetModel.js" as Model
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTokens.js" as T
+import "../components"
 
 // System monitor card: CPU, RAM, and GPU circular gauges.
 // Colors, refresh interval, and sub-widget visibility are config-driven.

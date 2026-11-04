@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const tokens = require('../WidgetTokens.js')
+const tokens = require('../lib/WidgetTokens.js')
 const read = (name) => fs.readFileSync(path.join(root, name), 'utf8')
 
 test('type scale is ordered and keeps text readable', () => {
@@ -32,7 +32,7 @@ test('weights are Qt 6 Font.Weight values', () => {
 test('emphasis levels match the WidgetTheme text resolvers', () => {
   global.Qt = { rgba: (r, g, b, a) => ({ r, g, b, a }) }
   try {
-    const theme = require('../WidgetTheme.js')
+    const theme = require('../lib/WidgetTheme.js')
     const text = { r: 1, g: 1, b: 1 }
     assert.equal(theme.resolveSecondaryColor(text).a, tokens.emphasis.secondary)
     assert.equal(theme.resolveMutedColor(text).a, tokens.emphasis.muted)
@@ -44,10 +44,11 @@ test('emphasis levels match the WidgetTheme text resolvers', () => {
 
 test('migrated cards take type, weight and radius from tokens', () => {
   const files = ['TopProcesses', 'DiskUsage', 'NetworkSpeed', 'Temperature', 'SystemMonitor', 'BatteryWidget',
-    'MediaWidget', 'CircularGauge', 'GpuGauge', 'GpuPage', 'CompactToggle'].map(name => name + '.qml')
+    'MediaWidget', 'CircularGauge', 'GpuGauge', 'GpuPage', 'CompactToggle']
+    .map(name => (['CircularGauge', 'CompactToggle'].includes(name) ? 'components/' : 'widgets/') + name + '.qml')
   for (const file of files) {
     const source = read(file)
-    assert.match(source, /import "WidgetTokens\.js" as T/, file)
+    assert.match(source, /import "\.\.\/lib\/WidgetTokens\.js" as T/, file)
     assert.doesNotMatch(source, /font\.pixelSize: [0-9]/, file + ' hard-codes a font size')
     assert.doesNotMatch(source, /font\.bold|font\.weight: Font\./, file + ' hard-codes a weight')
     assert.doesNotMatch(source, /cardRadius: [0-9]/, file + ' hard-codes the card radius')
@@ -55,7 +56,7 @@ test('migrated cards take type, weight and radius from tokens', () => {
 })
 
 test('list-card headers share one style', () => {
-  for (const file of ['TopProcesses.qml', 'DiskUsage.qml']) {
+  for (const file of ['widgets/TopProcesses.qml', 'widgets/DiskUsage.qml']) {
     const source = read(file)
     assert.match(source, /font\.pixelSize: T\.type\.title\s+font\.weight: T\.weight\.bold\s+font\.letterSpacing: T\.tracking\.wide/, file)
   }

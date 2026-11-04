@@ -3,13 +3,13 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "WidgetModel.js" as Model
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "GpuModel.js" as Gpu
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
-import "WidgetTokens.js" as T
+import "../lib/WidgetModel.js" as Model
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/GpuModel.js" as Gpu
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTokens.js" as T
 
 // Temperature sensors card: flat list layout.
 // Large hottest temp + status on the left, vertical divider,

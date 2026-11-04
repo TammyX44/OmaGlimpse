@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const Sizing = require('../WidgetSizing.js')
+const Sizing = require('../lib/WidgetSizing.js')
 
 test('Auto height preserves the natural card footprint', () => {
   for (const natural of [110, 180, 237.5, 640]) {

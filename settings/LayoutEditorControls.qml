@@ -1,7 +1,8 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
-import "LayoutProfiles.js" as Profiles
+import "../lib/LayoutProfiles.js" as Profiles
+import "../components"
 
 Column {
   id: editor

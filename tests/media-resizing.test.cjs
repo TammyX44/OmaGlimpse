@@ -19,7 +19,7 @@ import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Services.Mpris
-import "." as Plugin
+import "widgets"
 
 ShellRoot {
   id: suite
@@ -78,48 +78,48 @@ ShellRoot {
       id: preview
       width: 1120; height: 740
       Rectangle { anchors.fill: parent; color: "#151821" }
-      Plugin.MediaWidget { id: card; x: 10; y: 10; samplingEnabled: false }
-      Plugin.MediaWidget {
+      MediaWidget { id: card; x: 10; y: 10; samplingEnabled: false }
+      MediaWidget {
         id: tall; x: 560; y: 10; samplingEnabled: false; visible: false
         players: [player]
         config: ({widgets:{media:{cardWidth:200,cardHeight:360}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: narrow; x: 10; y: 210; samplingEnabled: false; visible: false
         players: [player]
         config: ({widgets:{media:{cardWidth:200,cardHeight:100}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: wide; x: 10; y: 330; samplingEnabled: false; visible: false
         players: [player]
         config: ({widgets:{media:{cardWidth:500,cardHeight:100}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: noControls; x: 240; y: 220; samplingEnabled: false; visible: false
         players: [player]
         config: ({widgets:{media:{cardWidth:280,cardHeight:80,showControls:false}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: unknownAuto; x: 10; y: 540; samplingEnabled: false; visible: false
         players: [unknownPlayer]
         config: ({widgets:{media:{cardWidth:340,cardHeight:0}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: unknownCompact; x: 560; y: 390; samplingEnabled: false; visible: false
         players: [unknownPlayer]
         config: ({widgets:{media:{cardWidth:200,cardHeight:100}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: noMetadataAuto; x: 370; y: 540; samplingEnabled: false; visible: false
         players: [noMetadataPlayer]
         config: ({widgets:{media:{cardWidth:340,cardHeight:0}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: noMetadataCompact; x: 780; y: 390; samplingEnabled: false; visible: false
         players: [noMetadataPlayer]
         config: ({widgets:{media:{cardWidth:200,cardHeight:100}}})
       }
-      Plugin.MediaWidget {
+      MediaWidget {
         id: idle; x: 240; y: 450; samplingEnabled: false; visible: false
         config: ({widgets:{media:{cardWidth:280,cardHeight:80,showControls:false}}})
       }
@@ -446,13 +446,14 @@ test('real Qt media layout fits compact dimensions and keeps playback usable', {
     for (const directory of ['Commons', 'Ui']) {
       fs.symlinkSync(path.join(shellDirectory, directory), path.join(stage, directory))
     }
-    for (const filename of ['ArtworkPlaceholder.qml', 'WidgetConfig.js', 'WidgetTheme.js', 'WidgetTokens.js', 'WidgetSizing.js', 'SamplingModel.js']) {
-      fs.copyFileSync(path.join(repository, filename), path.join(stage, filename))
-    }
-    const original = fs.readFileSync(path.join(repository, 'MediaWidget.qml'), 'utf8')
+    fs.cpSync(path.join(repository, 'lib'), path.join(stage, 'lib'), { recursive: true })
+    fs.cpSync(path.join(repository, 'scripts'), path.join(stage, 'scripts'), { recursive: true })
+    fs.mkdirSync(path.join(stage, 'widgets'))
+    fs.copyFileSync(path.join(repository, 'widgets', 'ArtworkPlaceholder.qml'), path.join(stage, 'widgets', 'ArtworkPlaceholder.qml'))
+    const original = fs.readFileSync(path.join(repository, 'widgets', 'MediaWidget.qml'), 'utf8')
     const discovery = 'readonly property var players: Mpris.players ? Mpris.players.values : []'
     assert.ok(original.includes(discovery), 'update the isolated player injection after discovery changes')
-    fs.writeFileSync(path.join(stage, 'MediaWidget.qml'), original.replace(discovery, 'property var players: []'))
+    fs.writeFileSync(path.join(stage, 'widgets', 'MediaWidget.qml'), original.replace(discovery, 'property var players: []'))
     fs.writeFileSync(path.join(stage, 'shell.qml'), fixture)
     const result = spawnSync('qs', ['--no-color', '-p', path.join(stage, 'shell.qml')], {
       encoding: 'utf8', timeout: 50000, maxBuffer: 1024 * 1024,

@@ -4,8 +4,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const media = fs.readFileSync(path.join(root, 'MediaWidget.qml'), 'utf8')
-const placeholder = fs.readFileSync(path.join(root, 'ArtworkPlaceholder.qml'), 'utf8')
+const media = fs.readFileSync(path.join(root, 'widgets', 'MediaWidget.qml'), 'utf8')
+const placeholder = fs.readFileSync(path.join(root, 'widgets', 'ArtworkPlaceholder.qml'), 'utf8')
 
 test('the media card shows theme-matched fallback artwork only without a ready cover', () => {
   assert.match(media, /ArtworkPlaceholder\s*\{[\s\S]*?accentColor: root\.accentColor[\s\S]*?textColor: root\.textColor[\s\S]*?visible: !artImage\.visible/)

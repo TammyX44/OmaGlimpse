@@ -1,8 +1,9 @@
 import QtQuick
 import QtTest
 import Quickshell
-import "." as Plugin
-import "WidgetConfig.js" as Config
+import "widgets"
+import "settings"
+import "lib/WidgetConfig.js" as Config
 
 ShellRoot {
   id: root
@@ -16,14 +17,14 @@ ShellRoot {
       id: preview
       width: 1100; height: 900
       Rectangle { anchors.fill: parent; color: "#151821" }
-      Plugin.SystemMonitor { id: system; x: 24; y: 24; samplingEnabled: false }
-      Plugin.BatteryWidget { id: battery; x: 548; y: 24; samplingEnabled: false }
-      Plugin.Temperature { id: temperature; x: 832; y: 24; samplingEnabled: false }
-      Plugin.MediaWidget { id: media; x: 24; y: 308; samplingEnabled: false }
-      Plugin.TopProcesses { id: processes; x: 378; y: 308; samplingEnabled: false }
-      Plugin.DiskUsage { id: disk; x: 732; y: 308; samplingEnabled: false }
-      Plugin.NetworkSpeed { id: network; x: 24; y: 582; samplingEnabled: false }
-      Plugin.WidgetSizeControls {
+      SystemMonitor { id: system; x: 24; y: 24; samplingEnabled: false }
+      BatteryWidget { id: battery; x: 548; y: 24; samplingEnabled: false }
+      Temperature { id: temperature; x: 832; y: 24; samplingEnabled: false }
+      MediaWidget { id: media; x: 24; y: 308; samplingEnabled: false }
+      TopProcesses { id: processes; x: 378; y: 308; samplingEnabled: false }
+      DiskUsage { id: disk; x: 732; y: 308; samplingEnabled: false }
+      NetworkSpeed { id: network; x: 24; y: 582; samplingEnabled: false }
+      WidgetSizeControls {
         id: controls
         x: 378; y: 606; width: 460
         widgetId: "demo"

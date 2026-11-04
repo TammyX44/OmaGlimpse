@@ -3,8 +3,10 @@ import QtTest
 import Quickshell
 import Quickshell.Wayland
 import "." as Plugin
-import "WidgetConfig.js" as Config
-import "LayoutProfiles.js" as Profiles
+import "widgets"
+import "settings"
+import "lib/WidgetConfig.js" as Config
+import "lib/LayoutProfiles.js" as Profiles
 
 ShellRoot {
   id: root
@@ -16,7 +18,7 @@ ShellRoot {
     visible: false
     configPath: Quickshell.env("LAYOUT_TEST_CONFIG")
   }
-  Plugin.SettingsPanel {
+  SettingsPanel {
     id: settings
     config: root.fixture
     expandedWidgets: ({networkSpeed:true})
@@ -31,7 +33,7 @@ ShellRoot {
       id: preview
       width: 820; height: 700
       Rectangle { anchors.fill: parent; color: "#151821" }
-    Plugin.LayoutEditorControls {
+    LayoutEditorControls {
       id: editor
       x: 24; y: 24; width: 440
       config: ({editor:{snapToGrid:true,snapToCards:true,gridSize:8},namedLayouts:{Work:{}}})
@@ -40,7 +42,7 @@ ShellRoot {
       undoAvailable: true
       hostActive: true
     }
-    Plugin.NetworkSpeed {
+    NetworkSpeed {
       id: network
       x: 500; y: 24
       samplingEnabled: false
