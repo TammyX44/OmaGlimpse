@@ -8,7 +8,8 @@ mkdir -p "$stage/runtime"
 chmod 700 "$stage/runtime"
 ln -s "$shell_dir/Commons" "$stage/Commons"
 ln -s "$shell_dir/Ui" "$stage/Ui"
-for file in "$repo"/*.qml "$repo"/*.js "$repo"/*.sh "$repo"/*.py; do ln -s "$file" "$stage/${file##*/}"; done
+for entry in "$repo"/*.qml; do ln -s "$entry" "$stage/${entry##*/}"; done
+for dir in widgets components settings lib scripts; do ln -s "$repo/$dir" "$stage/$dir"; done
 cp "$repo/tests/layout-ui-smoke.qml" "$stage/shell.qml"
 cp "$repo/tests/layout-empty-config.json" "$stage/config.json"
 status=0

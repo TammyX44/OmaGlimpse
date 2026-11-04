@@ -4,10 +4,13 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "WidgetLayout.js" as Layout
-import "LayoutProfiles.js" as Profiles
+import "lib/WidgetConfig.js" as Config
+import "lib/WidgetTheme.js" as Theme
+import "lib/WidgetLayout.js" as Layout
+import "lib/LayoutProfiles.js" as Profiles
+import "widgets"
+import "components"
+import "settings"
 
 // Desktop Widgets — floating overlay cards on the desktop.
 //
@@ -249,13 +252,13 @@ PanelWindow {
 
   function widgetSourceUrl(widgetId) {
     var map = {
-      systemMonitor: "SystemMonitor.qml",
-      battery: "BatteryWidget.qml",
-      media: "MediaWidget.qml",
-      topProcesses: "TopProcesses.qml",
-      networkSpeed: "NetworkSpeed.qml",
-      diskUsage: "DiskUsage.qml",
-      temperature: "Temperature.qml"
+      systemMonitor: "widgets/SystemMonitor.qml",
+      battery: "widgets/BatteryWidget.qml",
+      media: "widgets/MediaWidget.qml",
+      topProcesses: "widgets/TopProcesses.qml",
+      networkSpeed: "widgets/NetworkSpeed.qml",
+      diskUsage: "widgets/DiskUsage.qml",
+      temperature: "widgets/Temperature.qml"
     }
     return map[widgetId] || ""
   }

@@ -3,8 +3,8 @@ import QtTest
 import Quickshell
 import Quickshell.Io
 import "." as Plugin
-import "WidgetConfig.js" as Config
-import "LayoutProfiles.js" as Profiles
+import "lib/WidgetConfig.js" as Config
+import "lib/LayoutProfiles.js" as Profiles
 
 // The runner stages the actual plugin and supplies a fresh /tmp directory.
 // No persistence implementation is copied or mocked here.

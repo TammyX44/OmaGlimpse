@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "GpuModel.js" as Gpu
+import "../lib/GpuModel.js" as Gpu
 
 // One cached sysfs reader per device. Intel's optional tool streams samples,
 // instead of starting a new perf-counter process for every refresh.

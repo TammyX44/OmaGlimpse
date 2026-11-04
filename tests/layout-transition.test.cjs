@@ -3,8 +3,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const vm = require('node:vm')
 global.Quickshell = { env: () => '/tmp/layout-transition-test' }
-const Config = require('../WidgetConfig.js')
-const Profiles = require('../LayoutProfiles.js')
+const Config = require('../lib/WidgetConfig.js')
+const Profiles = require('../lib/LayoutProfiles.js')
 const source = fs.readFileSync(require('node:path').join(__dirname, '../Widgets.qml'), 'utf8')
 
 function setup() {

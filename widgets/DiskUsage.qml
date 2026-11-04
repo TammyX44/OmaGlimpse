@@ -4,12 +4,12 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "WidgetModel.js" as Model
-import "WidgetConfig.js" as Config
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
-import "WidgetTheme.js" as Theme
-import "WidgetTokens.js" as T
+import "../lib/WidgetModel.js" as Model
+import "../lib/WidgetConfig.js" as Config
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/WidgetTokens.js" as T
 
 // Disk usage card: per-mount usage bars with size/used/avail.
 BorderSurface {

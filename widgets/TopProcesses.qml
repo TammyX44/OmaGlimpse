@@ -4,11 +4,11 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "ProcessModel.js" as Model
-import "WidgetConfig.js" as Config
-import "WidgetSizing.js" as Sizing
-import "WidgetTheme.js" as Theme
-import "WidgetTokens.js" as T
+import "../lib/ProcessModel.js" as Model
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/WidgetTokens.js" as T
 
 // Top processes card: lists the top CPU-consuming processes.
 // Config-driven colors, refresh interval, process count, and sort order.
@@ -28,7 +28,7 @@ BorderSurface {
   property real samplingMultiplier: 1
   readonly property bool samplingActive: root.samplingEnabled && root.visible
   readonly property int samplingInterval: Model.samplingInterval(root.refreshInterval, root.samplingMultiplier)
-  property var snapshotCommand: ["python3", decodeURIComponent(String(Qt.resolvedUrl("process_snapshot.py")).replace(/^file:\/\//, ""))]
+  property var snapshotCommand: ["python3", decodeURIComponent(String(Qt.resolvedUrl("../scripts/process_snapshot.py")).replace(/^file:\/\//, ""))]
 
   // --- Config-driven settings ---
   readonly property var widgetCfg: Config.widgetConfig(root.config, root.widgetId) || {}

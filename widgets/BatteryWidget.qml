@@ -4,12 +4,13 @@ import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "WidgetModel.js" as Model
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
-import "WidgetTokens.js" as T
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/WidgetModel.js" as Model
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTokens.js" as T
+import "../components"
 
 // Battery & power card: circular charge gauge, status text, and
 // power profile picker. Config-driven colors and refresh interval.

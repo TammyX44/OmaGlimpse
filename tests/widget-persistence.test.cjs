@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const path = require('node:path')
 global.Quickshell = { env: () => '/tmp/widgets-test' }
-const Config = require('../WidgetConfig.js')
+const Config = require('../lib/WidgetConfig.js')
 const source = fs.readFileSync(path.join(__dirname, '../Widgets.qml'), 'utf8')
 function setup() {
   const root = { config: Config.defaultConfig(), configLoaded: false, pendingConfig: null,

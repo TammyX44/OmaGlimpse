@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 
-HELPER = Path(__file__).resolve().parents[1] / "process_snapshot.py"
+HELPER = Path(__file__).resolve().parents[1] / "scripts" / "process_snapshot.py"
 spec = importlib.util.spec_from_file_location("process_snapshot", HELPER)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)

@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const model = require('../WidgetModel.js')
+const model = require('../lib/WidgetModel.js')
 
 test('process names retain spaces and malformed samples are ignored', () => {
   assert.deepEqual(model.parseTopProcesses('123 Web Content 7.5 2.1\n123 broken xxx 3', 5),

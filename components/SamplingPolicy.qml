@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
-import "SamplingModel.js" as Sampling
+import "../lib/SamplingModel.js" as Sampling
 
 // Instantiate once in Widgets. Empty screenName means any powered output.
 // There is no global lock observer / DPMS notify API in installed Quickshell.

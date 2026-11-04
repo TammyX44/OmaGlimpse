@@ -182,7 +182,7 @@ FocusScope {
     pasteError = ""
     _job = pasteJob.createObject(root, {
       revision: _revision, before: text, start: selectionStart, end: selectionEnd,
-      command: ["python3", decodeURIComponent(String(Qt.resolvedUrl("bounded-clipboard.py")).replace(/^file:\/\//, "")),
+      command: ["python3", decodeURIComponent(String(Qt.resolvedUrl("../scripts/bounded-clipboard.py")).replace(/^file:\/\//, "")),
                 "--max-length", String(_limit)]
     })
     _job.running = true

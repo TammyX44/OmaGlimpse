@@ -1,9 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "WidgetConfig.js" as Config
-import "GpuModel.js" as Gpu
-import "SamplingModel.js" as Sampling
+import "../lib/WidgetConfig.js" as Config
+import "../lib/GpuModel.js" as Gpu
+import "../lib/SamplingModel.js" as Sampling
 
 // Shared by the system and temperature cards. Inventory is refreshed slowly;
 // readings use the shortest interval requested by the enabled consumers.
@@ -12,7 +12,7 @@ Item {
   property var config: ({})
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
-  property var discoveryCommand: ["sh", decodeURIComponent(Qt.resolvedUrl("gpu-discover.sh").toString().replace(/^file:\/\//, ""))]
+  property var discoveryCommand: ["sh", decodeURIComponent(Qt.resolvedUrl("../scripts/gpu-discover.sh").toString().replace(/^file:\/\//, ""))]
   readonly property var systemCfg: Config.widgetConfig(root.config, "systemMonitor") || {}
   readonly property var temperatureCfg: Config.widgetConfig(root.config, "temperature") || {}
   readonly property bool systemEnabled: systemCfg.enabled === true && systemCfg.showGpu !== false

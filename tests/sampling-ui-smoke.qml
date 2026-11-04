@@ -2,30 +2,31 @@ import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Services.UPower
-import "." as Plugin
+import "widgets"
+import "components"
 
 ShellRoot {
   id: root
   property bool startTests: false
   Timer { interval: 100; running: true; onTriggered: root.startTests = true }
-  Plugin.SamplingPolicy { id: policy; monitoringEnabled: false }
+  SamplingPolicy { id: policy; monitoringEnabled: false }
   FloatingWindow {
     visible: true
     implicitWidth: 800; implicitHeight: 600
-    Plugin.SystemMonitor {
+    SystemMonitor {
       id: systemCard
       samplingEnabled: false
       config: ({ widgets: { systemMonitor: { showGpu: false, refreshInterval: 500 } } })
     }
-    Plugin.Temperature {
+    Temperature {
       id: temperatureCard
       y: 150
       samplingEnabled: false
       config: ({ widgets: { temperature: { sensors: [], showFan: false } } })
     }
-    Plugin.DiskUsage { id: diskCard; x: 400; samplingEnabled: false }
-    Plugin.MediaWidget { id: mediaCard; x: 400; y: 250; samplingEnabled: false }
-    Plugin.BatteryWidget {
+    DiskUsage { id: diskCard; x: 400; samplingEnabled: false }
+    MediaWidget { id: mediaCard; x: 400; y: 250; samplingEnabled: false }
+    BatteryWidget {
       id: batteryCard
       y: 300
       samplingEnabled: false

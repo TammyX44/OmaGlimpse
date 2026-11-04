@@ -1,7 +1,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 global.Quickshell = { env: () => '/tmp/widgets-test' }
-const Config = require('../WidgetConfig.js')
+const Config = require('../lib/WidgetConfig.js')
 
 test('all seven cards default to Auto height, including legacy configs', () => {
   assert.equal(Config.allWidgetIds().length, 7)

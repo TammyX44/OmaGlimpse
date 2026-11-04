@@ -3,12 +3,13 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "WidgetModel.js" as Model
-import "WidgetConfig.js" as Config
-import "WidgetSizing.js" as Sizing
-import "WidgetTheme.js" as Theme
-import "WidgetTokens.js" as T
-import "NetworkHistory.js" as History
+import "../lib/WidgetModel.js" as Model
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/WidgetTokens.js" as T
+import "../lib/NetworkHistory.js" as History
+import "../components"
 
 // Network speed card: download and upload speed gauges.
 // Reads /proc/net/dev and computes delta between polls.
