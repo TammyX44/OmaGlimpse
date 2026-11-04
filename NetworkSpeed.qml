@@ -6,6 +6,8 @@ import qs.Ui
 import "WidgetModel.js" as Model
 import "WidgetConfig.js" as Config
 import "WidgetSizing.js" as Sizing
+import "WidgetTheme.js" as Theme
+import "WidgetTokens.js" as T
 import "NetworkHistory.js" as History
 
 // Network speed card: download and upload speed gauges.
@@ -19,7 +21,7 @@ BorderSurface {
   property color borderColor: Qt.rgba(1, 1, 1, 0.12)
   property color textColor: Color.foreground
   property color accentColor: Color.accent
-  property real cardRadius: 18
+  property real cardRadius: T.radius.card
   property real gaugeDiameter: 120
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
@@ -40,7 +42,7 @@ BorderSurface {
   readonly property bool compactNumbers: root.requestedHeight > 0 && root.requestedHeight < 160
   readonly property bool compactSizing: root.requestedHeight > 0
     && (root.compactNumbers || root.requestedHeight < root.baseGaugeDiameter + root.fullLayoutOverhead)
-  readonly property int contentPadding: root.compactSizing ? 8 : 20
+  readonly property int contentPadding: root.compactSizing ? T.padding.compact : T.padding.card
   readonly property real minimumCardHeight: root.showHistory ? 90 : 80
   readonly property real baseGaugeDiameter: {
     if (widgetCardWidth <= 0) return widgetGaugeDiameter
@@ -67,7 +69,7 @@ BorderSurface {
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(300, root.widgetGaugeDiameter * 2 + 48)
   readonly property real naturalCardHeight: root.baseGaugeDiameter + root.fullLayoutOverhead
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
-  FontMetrics { id: networkFont; font.family: Style.font.family; font.pixelSize: 10 }
+  FontMetrics { id: networkFont; font.family: Style.font.family; font.pixelSize: T.type.label }
 
 
   property var prevDevs: null
@@ -222,11 +224,11 @@ BorderSurface {
       text: (root.activeInterface || (root.interfaceFilter !== "auto" ? root.interfaceFilter : "—"))
         + (root.compactSizing && !root.sampleReady ? " · " + root.sampleState : "")
       Accessible.name: text
-      color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+      color: Theme.resolveMutedColor(root.textColor)
       font.family: Style.font.family
-      font.pixelSize: 11
-      font.bold: true
-      font.letterSpacing: 1
+      font.pixelSize: T.type.body
+      font.weight: T.weight.bold
+      font.letterSpacing: T.tracking.tight
       anchors.horizontalCenter: parent.horizontalCenter
     }
 
@@ -278,7 +280,9 @@ BorderSurface {
             textFormat: Text.PlainText
             color: root.textColor
             font.family: Style.font.family
-            font.pixelSize: 10
+            font.pixelSize: T.type.label
+            font.weight: T.weight.medium
+            font.letterSpacing: T.tracking.wide
             horizontalAlignment: Text.AlignHCenter
           }
           Text {
@@ -287,7 +291,7 @@ BorderSurface {
             textFormat: Text.PlainText
             color: root.accentColor
             font.family: Style.font.family
-            font.pixelSize: 13
+            font.pixelSize: T.type.value
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             Accessible.name: parent.modelData.label + " " + text

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons
+import "WidgetTokens.js" as T
 
 // Circular ring gauge — reusable component for all widget gauges.
 // Thin ring style matching macOS-style widget reference:
@@ -36,7 +37,7 @@ Item {
 
   width: diameter
   height: diameter + (showLabel ? labelSpacing + gaugeLabel.implicitHeight : 0)
-    + (subLabel !== "" ? 4 + gaugeDetail.implicitHeight : 0)
+    + (subLabel !== "" ? T.spacing.xs + gaugeDetail.implicitHeight : 0)
 
   Behavior on value {
     enabled: gauge.animateValue
@@ -135,8 +136,8 @@ Item {
     minimumPixelSize: 9
     color: gauge.textColor
     font.family: Style.font.family
-    font.pixelSize: Math.max(10, gauge.diameter * 0.24)
-    font.bold: true
+    font.pixelSize: Math.max(T.type.label, gauge.diameter * 0.24)
+    font.weight: T.weight.bold
   }
 
   // Label below the gauge — small, bold, letter-spaced
@@ -153,9 +154,9 @@ Item {
     text: gauge.label
     color: gauge.labelColor
     font.family: Style.font.family
-    font.pixelSize: 10
-    font.weight: Font.Medium
-    font.letterSpacing: 1.5
+    font.pixelSize: T.type.label
+    font.weight: T.weight.medium
+    font.letterSpacing: T.tracking.wide
   }
 
   // Sub-label (optional details) — very small, muted but readable
@@ -169,12 +170,12 @@ Item {
     maximumLineCount: 1
     visible: gauge.subLabel !== ""
     anchors.top: gauge.showLabel ? gaugeLabel.bottom : shape.bottom
-    anchors.topMargin: 4
+    anchors.topMargin: T.spacing.xs
     anchors.horizontalCenter: shape.horizontalCenter
     textFormat: Text.PlainText
     text: gauge.subLabel
     color: gauge.subTextColor
     font.family: Style.font.family
-    font.pixelSize: 10
+    font.pixelSize: T.type.caption
   }
 }

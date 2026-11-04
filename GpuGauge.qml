@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls as Controls
 import qs.Commons
 import "GpuModel.js" as Gpu
+import "WidgetTokens.js" as T
 
 // Fixed-size GPU slot: names and availability never resize the system card.
 Item {
@@ -202,7 +203,7 @@ Item {
   Rectangle {
     anchors.fill: parent
     anchors.margins: -3
-    radius: 6
+    radius: T.radius.control
     color: "transparent"
     border.color: root.accentColor
     border.width: 1
@@ -222,7 +223,7 @@ Item {
       textFormat: Text.PlainText
       color: root.textColor
       font.family: Style.font.family
-      font.pixelSize: 11
+      font.pixelSize: T.type.body
     }
   }
   MouseArea {
@@ -257,7 +258,7 @@ Item {
       objectName: modelData < 0 ? "previousGpu" : "nextGpu"
       x: root.compact ? (modelData < 0 ? 0 : root.width - width) : (modelData < 0 ? -5 : root.width - 19)
       y: root.diameter + (root.compact ? 18 : 2)
-      width: root.compact ? 18 : 24; height: root.compact ? 18 : 24; radius: 6
+      width: root.compact ? 18 : 24; height: root.compact ? 18 : 24; radius: T.radius.control
       visible: root.canSwitch && (gaugeHover.hovered || root.activeFocus || root.arrowFocused)
       onActiveFocusChanged: {
         var other = gpuArrows.itemAt(modelData < 0 ? 1 : 0)
@@ -273,7 +274,7 @@ Item {
       Text {
         anchors.centerIn: parent
         text: parent.modelData < 0 ? "‹" : "›"
-        font.pixelSize: 20
+        font.pixelSize: T.type.iconLarge
         color: root.textColor
       }
       TapHandler { onTapped: root.switchGpu(parent.modelData) }
