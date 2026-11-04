@@ -144,6 +144,12 @@ function resolveTempGaugeColor(config, widgetId, temp, accentColor) {
   if (resolveGaugeMode(config, widgetId) === "accent") return accentColor
   return resolveTempColor(temp)
 }
+// Text emphasis levels (opacities live in WidgetTokens.js).
+// Secondary text: values that support the primary reading (70% opacity)
+function resolveSecondaryColor(textColor) {
+  return Qt.rgba(textColor.r, textColor.g, textColor.b, 0.70)
+}
+
 function resolveMutedColor(textColor) {
   return Qt.rgba(textColor.r, textColor.g, textColor.b, 0.60)
 }
@@ -169,6 +175,7 @@ if (typeof module !== "undefined") {
     resolveGaugeColor: resolveGaugeColor,
     resolveBatteryGaugeColor: resolveBatteryGaugeColor,
     resolveTempGaugeColor: resolveTempGaugeColor,
+    resolveSecondaryColor: resolveSecondaryColor,
     resolveMutedColor: resolveMutedColor,
     resolveDimColor: resolveDimColor
   }
