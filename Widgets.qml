@@ -1159,6 +1159,8 @@ PanelWindow {
         pending:!!root.pendingConfig, persistenceBlocked:root.persistenceBlocked,
         externalConflict:root.externalConflict, saveStatus:root.saveStatus, configError:root.configError,
         settingsLoaded:!!root.settingsPanel,
+        gpu: {pollingEnabled: gpuMonitor.pollingEnabled, discoveryReady: gpuMonitor.discoveryReady,
+          discoveryCommand: gpuMonitor.discoveryCommand, devices: gpuMonitor.devices},
         activeLayoutKey:root.activeLayoutKey, currentLayoutKey:root.currentLayoutKey, cards:cards,
         media: media ? {player:player ? player.dbusName : "", canSeek:media.canSeek,
           positionSupported:player ? player.positionSupported : false,
