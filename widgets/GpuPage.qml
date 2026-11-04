@@ -48,7 +48,7 @@ Item {
       : root.compact ? (root.discoveryReady ? "None" : "…") : root.discoveryReady ? "No GPU detected" : "Detecting…"
     color: root.textColor
     font.family: Style.font.family
-    font.pixelSize: root.compact ? T.type.caption : T.type.body
+    font.pixelSize: root.compact || root.diameter < 64 ? T.type.caption : T.type.body
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
   }

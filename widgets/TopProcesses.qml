@@ -422,6 +422,7 @@ BorderSurface {
                 font.family: Style.font.family
                 font.pixelSize: T.type.body
                 horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignVCenter
                 anchors.verticalCenter: parent.verticalCenter
               }
             }
