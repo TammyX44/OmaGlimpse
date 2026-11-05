@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-spec = importlib.util.spec_from_file_location('media_snapshot', Path(__file__).resolve().parents[1] / 'media_snapshot.py')
+spec = importlib.util.spec_from_file_location('media_snapshot', Path(__file__).resolve().parents[1] / 'scripts' / 'media_snapshot.py')
 media = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(media)
 

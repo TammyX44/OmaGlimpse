@@ -5,21 +5,20 @@ def run_fixture():
     repo=pathlib.Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix='omawidgets-mpris-integration-') as directory:
      stage=pathlib.Path(directory)
-     for file in repo.iterdir():
-      if file.suffix in ['.qml','.js','.py']: shutil.copy2(file,stage/file.name)
+     for folder in ['widgets','components','lib','scripts']: shutil.copytree(repo/folder,stage/folder)
      for folder in ['Commons','Ui']: (stage/folder).symlink_to('/usr/share/omarchy/shell/'+folder)
      (stage/'runtime').mkdir(mode=0o700)
      (stage/'shell.qml').write_text('''import QtQuick
     import QtTest
     import Quickshell
-    import "." as Plugin
+    import "widgets"
     ShellRoot {
      id: suite
      property bool ready: false
      Timer { interval: 300; running: true; onTriggered: suite.ready = true }
      FloatingWindow {
      visible: true; implicitWidth: 500; implicitHeight: 300
-     Plugin.MediaWidget { id: card }
+     MediaWidget { id: card }
      Timer { interval: 100; repeat: true; running: card.activePlayer !== null
        onTriggered: card.activePlayer.positionChanged() }
      TestCase {

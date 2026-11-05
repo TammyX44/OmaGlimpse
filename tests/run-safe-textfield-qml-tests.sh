@@ -8,7 +8,7 @@ mkdir -p "$stage/runtime" "$stage/bin"
 chmod 700 "$stage/runtime"
 ln -s "$shell_dir/Commons" "$stage/Commons"
 ln -s "$shell_dir/Ui" "$stage/Ui"
-for file in "$repo"/*.qml "$repo"/*.js "$repo"/*.py; do cp "$file" "$stage/${file##*/}"; done
+for dir in components lib scripts; do cp -R "$repo/$dir" "$stage/$dir"; done
 cp "$repo/tests/safe-textfield-ui.qml" "$stage/shell.qml"
 # Use a delayed stub, never the user's clipboard. It also exercises cancellation.
 cp "$repo/tests/safe-paste-fixture.py" "$stage/bin/wl-paste"

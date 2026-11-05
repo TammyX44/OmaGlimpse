@@ -1,8 +1,8 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const gpu = require('../GpuModel.js')
+const gpu = require('../lib/GpuModel.js')
 global.Quickshell = { env: () => '/tmp/widgets-test' }
-const config = require('../WidgetConfig.js')
+const config = require('../lib/WidgetConfig.js')
 
 const inventory = gpu.parseInventory([
   '0000:01:00.0\tGA107 [GeForce RTX 3050]\tnvidia\tnvidia\t/sys/class/drm/card1\t\t\t\t\t/power\t0',

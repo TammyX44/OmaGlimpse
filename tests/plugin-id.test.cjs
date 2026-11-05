@@ -19,17 +19,17 @@ test('manifest and shell entry points share the public plugin ID', () => {
 
 test('Wayland surfaces use the same plugin namespace', () => {
   assert.match(read('Widgets.qml'), new RegExp(`WlrLayershell\\.namespace: "${id.replaceAll('.', '\\.')}"`))
-  assert.match(read('SettingsPanel.qml'), new RegExp(`WlrLayershell\\.namespace: "${id.replaceAll('.', '\\.')}\\.settings"`))
-  assert.match(read('WidgetContextMenu.qml'), new RegExp(`WlrLayershell\\.namespace: "${id.replaceAll('.', '\\.')}\\.menu"`))
+  assert.match(read('settings/SettingsPanel.qml'), new RegExp(`WlrLayershell\\.namespace: "${id.replaceAll('.', '\\.')}\\.settings"`))
+  assert.match(read('components/WidgetContextMenu.qml'), new RegExp(`WlrLayershell\\.namespace: "${id.replaceAll('.', '\\.')}\\.menu"`))
 })
 
 test('the previous plugin ID and name are not shipped in renamed files', () => {
-  for (const name of ['manifest.json', 'SettingsButton.qml', 'Widgets.qml', 'SettingsPanel.qml', 'WidgetContextMenu.qml']) {
+  for (const name of ['manifest.json', 'SettingsButton.qml', 'Widgets.qml', 'settings/SettingsPanel.qml', 'components/WidgetContextMenu.qml']) {
     assert.doesNotMatch(read(name), /io\.github\.tammyx44\.omawidgets|OmaWidgets/)
   }
 })
 
 test('the existing user settings file remains compatible', () => {
   assert.match(read('Widgets.qml'), /~\/\.config\/omarchy\/tammy-widgets\.json/)
-  assert.match(read('WidgetConfig.js'), /\.config\/omarchy\/tammy-widgets\.json/)
+  assert.match(read('lib/WidgetConfig.js'), /\.config\/omarchy\/tammy-widgets\.json/)
 })

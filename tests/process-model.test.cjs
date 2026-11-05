@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const model = require('../ProcessModel.js')
+const model = require('../lib/ProcessModel.js')
 
 function process(pid, cpuTicks, startTime = '10', rssBytes = 100, name = 'worker') {
   return { pid: String(pid), startTime, cpuTicks, rssBytes, name }

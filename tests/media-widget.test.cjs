@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 
-const source = fs.readFileSync(path.join(__dirname, '../MediaWidget.qml'), 'utf8')
+const source = fs.readFileSync(path.join(__dirname, '../widgets/MediaWidget.qml'), 'utf8')
 // Quickshell's MprisPlaybackState Enum is ordered Stopped, Playing, Paused.
 const MprisPlaybackState = { Stopped: 0, Playing: 1, Paused: 2 }
 
@@ -414,7 +414,7 @@ function mediaLayout(showControls = true, showAlbumArt = true) {
   const layout = {
     root: { showControls, showAlbumArt, width: 340, hasMedia: false, timelineAvailable: false,
       durationAvailable: false, positionAvailable: false, trackLength: 0, widgetCfg: { cardHeight: 0 } },
-    Sizing: require('../WidgetSizing.js'),
+    Sizing: require('../lib/WidgetSizing.js'),
     content: { anchors: {} }, trackInfo: {}, seekRow: {}, transportRow: {}, artBox: {}, metadata: {}
   }
   const reading = new Set()

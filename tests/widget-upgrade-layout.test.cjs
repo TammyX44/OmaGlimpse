@@ -3,9 +3,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
-const Layout = require('../WidgetLayout.js')
+const Layout = require('../lib/WidgetLayout.js')
 global.Quickshell = { env: () => '/tmp/widgets-test' }
-const Config = require('../WidgetConfig.js')
+const Config = require('../lib/WidgetConfig.js')
 
 function monitor(overrides = {}) {
   return { widgetId: 'systemMonitor', x: 40, y: 44, width: 391,

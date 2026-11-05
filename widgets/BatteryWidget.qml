@@ -4,11 +4,13 @@ import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "WidgetModel.js" as Model
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/WidgetModel.js" as Model
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTokens.js" as T
+import "../components"
 
 // Battery & power card: circular charge gauge, status text, and
 // power profile picker. Config-driven colors and refresh interval.
@@ -22,7 +24,7 @@ BorderSurface {
   property color borderColor: Qt.rgba(1, 1, 1, 0.12)
   property color textColor: Color.foreground
   property color accentColor: Color.accent
-  property real cardRadius: 18
+  property real cardRadius: T.radius.card
   property real gaugeDiameter: 120
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
@@ -58,12 +60,12 @@ BorderSurface {
   color: root.cardColor
   borderSpec: Border.surfaceSpec("widget", "border", root.borderColor, 1)
   radius: root.cardRadius
-  padding: 16
+  padding: T.padding.cardSmall
 
   width: widgetCardWidth > 0 ? widgetCardWidth : Math.max(260, root.widgetGaugeDiameter + 48)
   readonly property real naturalCardHeight: root.preferredGaugeDiameter + root.fullLayoutOverhead
   height: Sizing.cardHeight(root.widgetCfg.cardHeight, root.naturalCardHeight, root.minimumCardHeight)
-  FontMetrics { id: batteryFont; font.family: Style.font.family; font.pixelSize: 10 }
+  FontMetrics { id: batteryFont; font.family: Style.font.family; font.pixelSize: T.type.label }
 
 
   readonly property var batteryDevice: UPower.displayDevice
@@ -357,8 +359,8 @@ BorderSurface {
       textFormat: Text.PlainText
       color: Theme.resolveMutedColor(root.textColor)
       font.family: Style.font.family
-      font.pixelSize: 11
-      minimumPixelSize: 10
+      font.pixelSize: T.type.body
+      minimumPixelSize: T.type.caption
       fontSizeMode: Text.Fit
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
@@ -378,7 +380,7 @@ BorderSurface {
         textFormat: Text.PlainText
         color: Color.urgent
         font.family: Style.font.family
-        font.pixelSize: 10
+        font.pixelSize: T.type.caption
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
         Accessible.name: root.profileError
@@ -440,10 +442,10 @@ BorderSurface {
             text: root.profileLabel(modelData)
             color: parent.isActive2() ? root.accentColor : Theme.resolveMutedColor(root.textColor)
             font.family: Style.font.family
-            font.pixelSize: 10
+            font.pixelSize: T.type.label
             minimumPixelSize: 9
             fontSizeMode: Text.Fit
-            font.weight: parent.isActive2() ? Font.DemiBold : Font.Medium
+            font.weight: parent.isActive2() ? T.weight.semibold : T.weight.medium
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             maximumLineCount: 1
@@ -469,7 +471,7 @@ BorderSurface {
       text: root.profileError
       color: Color.urgent
       font.family: Style.font.family
-      font.pixelSize: 10
+      font.pixelSize: T.type.caption
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
       elide: Text.ElideRight

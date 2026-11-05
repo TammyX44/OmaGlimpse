@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
+import "../lib/WidgetConfig.js" as Config
 
 // Right-click context menu for widget cards.
 // Appears at cursor position, provides quick access to:

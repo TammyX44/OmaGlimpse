@@ -15,14 +15,13 @@ test('list cards keep a readable row and support scrolling, focus, and resize re
   try {
     fs.mkdirSync(path.join(stage, 'runtime'), { mode: 0o700 })
     for (const dir of ['Commons', 'Ui']) fs.symlinkSync(path.join(shell, dir), path.join(stage, dir))
-    for (const file of ['TopProcesses.qml', 'DiskUsage.qml', 'ProcessModel.js', 'WidgetModel.js',
-      'WidgetConfig.js', 'SamplingModel.js', 'WidgetSizing.js'])
-      fs.symlinkSync(path.join(repo, file), path.join(stage, file))
+    for (const dir of ['widgets', 'components', 'lib', 'scripts'])
+      fs.symlinkSync(path.join(repo, dir), path.join(stage, dir))
     fs.writeFileSync(path.join(stage, 'shell.qml'), `
 import QtQuick
 import QtTest
 import Quickshell
-import "." as Plugin
+import "widgets"
 
 ShellRoot {
   id: root
@@ -35,8 +34,8 @@ ShellRoot {
     Item {
       id: preview
       anchors.fill: parent
-      Plugin.TopProcesses { id: processes; x: 10; y: 10; samplingEnabled: false }
-      Plugin.DiskUsage { id: disk; x: 340; y: 10; samplingEnabled: false }
+      TopProcesses { id: processes; x: 10; y: 10; samplingEnabled: false }
+      DiskUsage { id: disk; x: 340; y: 10; samplingEnabled: false }
     }
     TestCase {
       name: "ListCardResizing"

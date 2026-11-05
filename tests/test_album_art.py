@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlsplit
 import zlib
 
 
-HELPER = Path(__file__).resolve().parents[1] / "fetch_album_art.py"
+HELPER = Path(__file__).resolve().parents[1] / "scripts" / "fetch_album_art.py"
 SPEC = importlib.util.spec_from_file_location("album_art", HELPER)
 album_art = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(album_art)

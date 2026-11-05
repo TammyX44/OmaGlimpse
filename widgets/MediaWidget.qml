@@ -4,10 +4,11 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
-import "SamplingModel.js" as Sampling
-import "WidgetSizing.js" as Sizing
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../lib/SamplingModel.js" as Sampling
+import "../lib/WidgetSizing.js" as Sizing
+import "../lib/WidgetTokens.js" as T
 
 // Media now-playing card.
 // Player selection follows the same priority pattern as Omarchy's
@@ -29,7 +30,7 @@ BorderSurface {
   property color borderColor: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.15)
   property color textColor: Color.foreground
   property color accentColor: Color.accent
-  property real cardRadius: 18
+  property real cardRadius: T.radius.card
   property real gaugeDiameter: 120
   property bool samplingEnabled: true
   property real samplingMultiplier: 1
@@ -202,7 +203,7 @@ BorderSurface {
     }
     if (!/^https:\/\//i.test(url)) return
 
-    var helper = decodeURIComponent(String(Qt.resolvedUrl("fetch_album_art.py")).replace(/^file:\/\//, ""))
+    var helper = decodeURIComponent(String(Qt.resolvedUrl("../scripts/fetch_album_art.py")).replace(/^file:\/\//, ""))
     var process = artworkProcessComponent.createObject(root, {
       requestKey: root.artworkRequestKey,
       command: ["python3", helper, url]
@@ -312,7 +313,7 @@ BorderSurface {
 
   function requestTiming() {
     if (!root.samplingActive || !root.hasMedia || root.seeking || root.timingProcess) return
-    var helper = decodeURIComponent(String(Qt.resolvedUrl("media_snapshot.py")).replace(/^file:\/\//, ""))
+    var helper = decodeURIComponent(String(Qt.resolvedUrl("../scripts/media_snapshot.py")).replace(/^file:\/\//, ""))
     var process = timingProcessComponent.createObject(root, {
       requestKey: root.timingKey, requestEpoch: root.timingEpoch,
       command: ["python3", helper, root.playerKey(root.activePlayer)]
@@ -558,7 +559,7 @@ BorderSurface {
           text: "♪"
           color: Theme.resolveMutedColor(root.textColor)
           font.family: Style.font.family
-          font.pixelSize: 20
+          font.pixelSize: T.type.iconLarge
           anchors.horizontalCenter: parent.horizontalCenter
         }
 
@@ -567,7 +568,7 @@ BorderSurface {
           text: "Nothing playing"
           color: Theme.resolveMutedColor(root.textColor)
           font.family: Style.font.family
-          font.pixelSize: 12
+          font.pixelSize: T.type.title
           anchors.horizontalCenter: parent.horizontalCenter
         }
       }
@@ -629,8 +630,8 @@ BorderSurface {
           text: root.title
           color: root.textColor
           font.family: Style.font.family
-          font.pixelSize: root.compactMetadata ? 12 : 14
-          font.bold: true
+          font.pixelSize: root.compactMetadata ? T.type.title : T.type.lead
+          font.weight: T.weight.bold
           height: root.compactMetadata ? 14 : 18
           lineHeightMode: Text.FixedHeight
           lineHeight: height
@@ -645,9 +646,9 @@ BorderSurface {
           textFormat: Text.PlainText
           text: root.compactMetadata
             ? root.artist + (root.artist && root.identity ? " · " : "") + root.identity : root.artist
-          color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.55)
+          color: Theme.resolveMutedColor(root.textColor)
           font.family: Style.font.family
-          font.pixelSize: root.compactMetadata ? 10 : 11
+          font.pixelSize: root.compactMetadata ? T.type.caption : T.type.body
           height: 14
           lineHeightMode: Text.FixedHeight
           lineHeight: height
@@ -663,7 +664,7 @@ BorderSurface {
           text: root.identity
           color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: 10
+          font.pixelSize: T.type.caption
           height: 14
           lineHeightMode: Text.FixedHeight
           lineHeight: height
@@ -748,9 +749,9 @@ BorderSurface {
         objectName: "mediaElapsedTime"
         textFormat: Text.PlainText
         text: root.positionAvailable ? root.formatTime(root.shownPosition) : "--:--"
-        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+        color: Theme.resolveMutedColor(root.textColor)
         font.family: Style.font.family
-        font.pixelSize: 10
+        font.pixelSize: T.type.caption
         width: Math.min(implicitWidth, parent.width * 0.22)
         height: 14
         elide: Text.ElideRight
@@ -764,9 +765,9 @@ BorderSurface {
         objectName: "mediaDurationTime"
         textFormat: Text.PlainText
         text: root.durationAvailable ? root.formatTime(root.trackLength) : "--:--"
-        color: Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.5)
+        color: Theme.resolveMutedColor(root.textColor)
         font.family: Style.font.family
-        font.pixelSize: 10
+        font.pixelSize: T.type.caption
         width: Math.min(implicitWidth, parent.width * 0.22)
         height: 14
         elide: Text.ElideRight
@@ -825,7 +826,7 @@ BorderSurface {
           color: prevHover.containsMouse || previousButton.activeFocus ? root.textColor
             : Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: root.compactLayout ? 16 : 20
+          font.pixelSize: root.compactLayout ? T.type.icon : T.type.iconLarge
           anchors.centerIn: parent
         }
 
@@ -872,7 +873,7 @@ BorderSurface {
           text: root.isPlaying ? "󰏤" : "󰐊"
           color: root.accentColor
           font.family: Style.font.family
-          font.pixelSize: root.compactLayout ? 16 : 20
+          font.pixelSize: root.compactLayout ? T.type.icon : T.type.iconLarge
           anchors.centerIn: parent
         }
 
@@ -925,7 +926,7 @@ BorderSurface {
           color: nextHover.containsMouse || nextButton.activeFocus ? root.textColor
             : Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: root.compactLayout ? 16 : 20
+          font.pixelSize: root.compactLayout ? T.type.icon : T.type.iconLarge
           anchors.centerIn: parent
         }
 
@@ -982,7 +983,7 @@ BorderSurface {
             : loopHover.containsMouse || loopButton.activeFocus ? root.textColor
             : Qt.rgba(root.textColor.r, root.textColor.g, root.textColor.b, 0.6)
           font.family: Style.font.family
-          font.pixelSize: root.compactLayout ? 16 : 20
+          font.pixelSize: root.compactLayout ? T.type.icon : T.type.iconLarge
           anchors.centerIn: parent
         }
 

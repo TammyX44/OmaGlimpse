@@ -2,8 +2,8 @@ import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Io
-import "." as Plugin
-import "WidgetConfig.js" as Config
+import "widgets"
+import "lib/WidgetConfig.js" as Config
 
 // Staged by run-gpu-qml-tests.sh so qs.Commons and qs.Ui resolve to the
 // installed shell, while every plugin component comes from this checkout.
@@ -17,7 +17,7 @@ ShellRoot {
     { id: "0000:01:00.0", name: "NVIDIA GeForce RTX 3050", kind: "Discrete GPU", vendor: "nvidia", utilization: 35, temp: 53, status: "Ready" }
   ]
   Item { id: readings; property var devices: root.fixture; property bool discoveryReady: true }
-  Plugin.GpuMonitor {
+  GpuMonitor {
     id: collector
     config: ({ widgets: { systemMonitor: { enabled: false }, temperature: { enabled: false } } })
     discoveryCommand: ["sh", decodeURIComponent(Qt.resolvedUrl("gpu-test-discover.sh").toString().replace(/^file:\/\//, ""))]
@@ -34,7 +34,7 @@ ShellRoot {
     visible: true
     implicitWidth: 650; implicitHeight: 310
     color: "#13151b"
-    Plugin.SystemMonitor {
+    SystemMonitor {
       id: card
       x: 25; y: 25
       config: root.testConfig
@@ -45,7 +45,7 @@ ShellRoot {
         root.testConfig = cfg
       }
     }
-    Plugin.Temperature {
+    Temperature {
       id: temperature
       x: 400; y: 25
       config: root.testConfig

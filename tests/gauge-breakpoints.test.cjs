@@ -15,15 +15,13 @@ test('Battery and Network gauge breakpoints preserve monotonic rings and Auto fo
   try {
     fs.mkdirSync(path.join(stage, 'runtime'), { mode: 0o700 })
     for (const dir of ['Commons', 'Ui']) fs.symlinkSync(path.join(shell, dir), path.join(stage, dir))
-    for (const file of ['BatteryWidget.qml', 'NetworkSpeed.qml', 'CircularGauge.qml',
-      'WidgetConfig.js', 'WidgetTheme.js', 'WidgetModel.js', 'SamplingModel.js',
-      'WidgetSizing.js', 'NetworkHistory.js'])
-      fs.symlinkSync(path.join(repo, file), path.join(stage, file))
+    for (const dir of ['widgets', 'components', 'lib', 'scripts'])
+      fs.symlinkSync(path.join(repo, dir), path.join(stage, dir))
     fs.writeFileSync(path.join(stage, 'shell.qml'), `
 import QtQuick
 import QtTest
 import Quickshell
-import "." as Plugin
+import "widgets"
 ShellRoot {
   id: root
   property bool ready: false
@@ -31,8 +29,8 @@ ShellRoot {
   FloatingWindow {
     visible: true
     implicitWidth: 1100; implicitHeight: 1050
-    Plugin.BatteryWidget { id: battery; samplingEnabled: false }
-    Plugin.NetworkSpeed { id: network; x: 550; samplingEnabled: false }
+    BatteryWidget { id: battery; samplingEnabled: false }
+    NetworkSpeed { id: network; x: 550; samplingEnabled: false }
     TestCase {
       name: "GaugeBreakpoints"
       when: root.ready

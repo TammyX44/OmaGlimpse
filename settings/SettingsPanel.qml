@@ -4,8 +4,9 @@ import Quickshell.Wayland
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "WidgetConfig.js" as Config
-import "WidgetTheme.js" as Theme
+import "../lib/WidgetConfig.js" as Config
+import "../lib/WidgetTheme.js" as Theme
+import "../components"
 
 // Full settings panel for the desktop widgets plugin.
 // Opens as a centered overlay PanelWindow with a dark scrim.

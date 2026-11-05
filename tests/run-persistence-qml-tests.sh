@@ -8,11 +8,12 @@ mkdir -p "$stage/fixtures" "$stage/config" "$stage/cache" "$stage/state"
 ln -s "$shell_dir/Commons" "$stage/Commons"
 ln -s "$shell_dir/Ui" "$stage/Ui"
 # Snapshot sources so concurrent main edits cannot change a running fixture.
-for file in "$repo"/*.qml "$repo"/*.js "$repo"/*.sh "$repo"/*.py; do
-  [ ! -f "$file" ] || cp "$file" "$stage/${file##*/}"
-done
+for file in "$repo"/*.qml; do cp "$file" "$stage/${file##*/}"; done
+for dir in widgets components settings lib scripts; do cp -R "$repo/$dir" "$stage/$dir"; done
 cp "$repo/tests/persistence-ui-smoke.qml" "$stage/shell.qml"
 # Optional before-fix comparison; extracts only into the disposable stage.
+# PERSISTENCE_TEST_REF only works for refs after the folder restructure (b8d8ebd):
+# older refs keep Widgets.qml beside flat card files and its imports will not resolve here.
 if [ -n "${PERSISTENCE_TEST_REF:-}" ]; then
   git -C "$repo" archive "$PERSISTENCE_TEST_REF" Widgets.qml | tar -x -C "$stage"
 fi

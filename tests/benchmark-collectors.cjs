@@ -24,20 +24,26 @@ function reading(pid) {
     switches, pssMiB: Number(memory.match(/^Pss:\s*(\d+)/m)[1])/1024}
 }
 
-function qml(modern) {
+// The base revision may predate the folder layout (flat files in the root).
+function layered(ref) {
+  try { execFileSync('git',['cat-file','-e',ref+':widgets/SystemMonitor.qml'],{cwd:repo,stdio:'ignore'}); return true }
+  catch (_) { return false }
+}
+
+function qml(modern, nested) {
+  const P = nested ? '' : 'Plugin.'
   const props = modern ? 'samplingEnabled: root.phase !== "paused" && policy.samplingEnabled; samplingMultiplier: root.phase === "saver" ? 3 : 1;' : ''
   return `import QtQuick
 import Quickshell
-import "." as Plugin
-import "WidgetConfig.js" as Config
+${nested ? 'import "widgets"\nimport "components"\nimport "lib/WidgetConfig.js" as Config' : 'import "." as Plugin\nimport "WidgetConfig.js" as Config'}
 ShellRoot {
  id: root
  property string phase: "warming"
  property int index: 0
  property var phases: ["normal", "saver", "paused", "done"]
  property var testConfig: { var c=Config.defaultConfig(); Config.allWidgetIds().forEach(function(id){c.widgets[id].enabled=true}); return c }
- ${modern ? 'Plugin.SamplingPolicy { id: policy; enabled: root.phase !== "paused" }' : ''}
- Plugin.GpuMonitor { id: gpu; config: root.testConfig; ${props} }
+ ${modern ? P + 'SamplingPolicy { id: policy; enabled: root.phase !== "paused" }' : ''}
+ ${P}GpuMonitor { id: gpu; config: root.testConfig; ${props} }
  Timer { interval: 3000; running:true; onTriggered:{root.phase="normal";console.log("BENCH_PHASE normal");phasesTimer.start()} }
  Timer { id: phasesTimer; interval:10000; repeat:true; onTriggered:{
   root.index++;root.phase=root.phases[root.index];console.log("BENCH_PHASE "+root.phase)
@@ -46,13 +52,13 @@ ShellRoot {
  Timer { id: quitTimer; interval:500; onTriggered:Qt.quit() }
  FloatingWindow {
   visible:true;implicitWidth:1200;implicitHeight:1000
-  Plugin.SystemMonitor { config:root.testConfig;gpuMonitor:gpu;${props} }
-  Plugin.BatteryWidget { x:500;config:root.testConfig;${props} }
-  Plugin.MediaWidget { y:250;config:root.testConfig;${props} }
-  Plugin.TopProcesses { x:500;y:250;config:root.testConfig;${props} }
-  Plugin.NetworkSpeed { y:520;config:root.testConfig;${props} }
-  Plugin.DiskUsage { x:500;y:520;config:root.testConfig;${props} }
-  Plugin.Temperature { y:800;config:root.testConfig;gpuMonitor:gpu;${props} }
+  ${P}SystemMonitor { config:root.testConfig;gpuMonitor:gpu;${props} }
+  ${P}BatteryWidget { x:500;config:root.testConfig;${props} }
+  ${P}MediaWidget { y:250;config:root.testConfig;${props} }
+  ${P}TopProcesses { x:500;y:250;config:root.testConfig;${props} }
+  ${P}NetworkSpeed { y:520;config:root.testConfig;${props} }
+  ${P}DiskUsage { x:500;y:520;config:root.testConfig;${props} }
+  ${P}Temperature { y:800;config:root.testConfig;gpuMonitor:gpu;${props} }
  }
 }`
 }
@@ -60,16 +66,18 @@ ShellRoot {
 async function run(label, modern) {
   const directory = path.join(stage,label)
   fs.mkdirSync(directory)
+  const baseRef = process.env.BENCH_BASE_REF || 'HEAD'
+  const nested = modern || layered(baseRef)
   if (modern) {
-    for (const name of fs.readdirSync(repo).filter(n=>/\.(qml|js|sh|py)$/.test(n)))
+    for (const name of fs.readdirSync(repo).filter(n=>/\.qml$/.test(n)).concat(['widgets','components','settings','lib','scripts']))
       fs.symlinkSync(path.join(repo,name),path.join(directory,name))
   } else {
-    const archive = execFileSync('git',['archive',process.env.BENCH_BASE_REF || 'HEAD','*.qml','*.js','*.sh','*.py'],{cwd:repo,maxBuffer:10*1024*1024})
+    const archive = execFileSync('git',['archive',baseRef,'*.qml','*.js','*.sh','*.py'],{cwd:repo,maxBuffer:10*1024*1024})
     execFileSync('tar',['-x','-C',directory],{input:archive})
   }
   const shell = process.env.OMARCHY_SHELL_DIR || '/usr/share/omarchy/shell'
   for (const module of ['Commons','Ui']) fs.symlinkSync(path.join(shell,module),path.join(directory,module))
-  fs.writeFileSync(path.join(directory,'shell.qml'),qml(modern))
+  fs.writeFileSync(path.join(directory,'shell.qml'),qml(modern, nested))
   return new Promise((resolve,reject)=>{
     const child = spawn('qs',['--no-color','-p',path.join(directory,'shell.qml')],{
       env:{...process.env,QT_QPA_PLATFORM:'offscreen',QT_QPA_PLATFORMTHEME:'basic',QT_QUICK_BACKEND:'software'}})

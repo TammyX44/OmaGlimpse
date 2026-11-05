@@ -12,7 +12,7 @@ import unittest
 
 
 REPO = Path(__file__).resolve().parents[1]
-HELPER = REPO / "bounded-clipboard.py"
+HELPER = REPO / "scripts" / "bounded-clipboard.py"
 CAP = 16384
 STUB = r'''
 import os
@@ -247,7 +247,7 @@ class BoundedClipboardTests(unittest.TestCase):
 
     def test_renderer_guard_and_owned_paste_entrypoint(self):
         # A small structural guard supplements the parent's interactive native QA.
-        qml = (REPO / "SafeTextField.qml").read_text()
+        qml = (REPO / "components" / "SafeTextField.qml").read_text()
         self.assertIn('objectName: "safeTextRenderer"', qml)
         self.assertIn("readOnly: true", qml)
         self.assertNotIn("readOnly: false", qml.replace("Accessible.readOnly: false", ""))
