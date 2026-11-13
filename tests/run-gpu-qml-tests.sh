@@ -30,8 +30,11 @@ printf '00000000:01:00.0, GeForce RTX 3050, 32, 123, 6144, 53\n'
 EOF
 cat > "$stage/bin/intel_gpu_top" <<'EOF'
 #!/bin/sh
-printf '[\n{"engines":{"Render/3D/0":{"busy":11}}}\n'
-while :; do sleep 1; printf ',\n{"engines":{"Render/3D/0":{"busy":11}}}\n'; done
+printf 'Freq MHz req,Freq MHz act,IRQ /s,RC6 %%,Power W gpu,Power W pkg,RCS %%,RCS se,RCS wa,BCS %%,BCS se,BCS wa,VCS %%,VCS se,VCS wa,VECS %%,VECS se,VECS wa\n'
+while :; do
+  printf '473.4,10.9,118.3,74.3,0.37,15.3,11.000000,0.0,0.0,2.500000,0.0,0.0,0.000000,0.0,0.0,0.000000,0.0,0.0\n'
+  sleep 1
+done
 EOF
 chmod +x "$stage/bin/nvidia-smi" "$stage/bin/intel_gpu_top"
 status=0
