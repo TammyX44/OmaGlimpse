@@ -75,7 +75,7 @@ Optional, for specific features:
 | Battery status and energy flow | UPower |
 | Media controls | An MPRIS-capable player |
 | NVIDIA readings | `nvidia-smi` |
-| Intel GPU usage | `intel_gpu_top` from `intel-gpu-tools`, with performance counters readable by your user |
+| Intel GPU usage | `intel_gpu_top` from `intel-gpu-tools` (a version with CSV output, `-c`), with performance counters readable by your user |
 | AMD GPU usage, VRAM, temperature | Readable `/sys` interfaces exposed by the driver |
 | Better GPU names | `lspci` |
 | Remote album covers | curl 8.4+ for size- and time-limited HTTPS downloads. Local covers and the theme-matched fallback work without it. |

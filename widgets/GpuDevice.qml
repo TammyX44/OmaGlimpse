@@ -22,7 +22,7 @@ Item {
   property real intelObservedAt: 0
   property bool intelFailed: false
   property bool intelRestarting: false
-  property string intelBuffer: ""
+  property var intelColumns: []
 
   function number(raw, divisor) {
     var value = Gpu.optionalNumber(String(raw).trim())
@@ -57,7 +57,7 @@ Item {
 
   onPollingEnabledChanged: {
     if (pollingEnabled) Qt.callLater(root.refresh)
-    else { root.intelBusy = -1; root.intelObservedAt = 0; root.intelBuffer = "" }
+    else { root.intelBusy = -1; root.intelObservedAt = 0; root.intelColumns = [] }
   }
   onRefreshIntervalChanged: if (intelProc.running) root.intelRestarting = true
   Component.onCompleted: root.refresh()
@@ -110,28 +110,31 @@ Item {
 
   Process {
     id: intelProc
-    command: ["intel_gpu_top", "-J", "-s", String(root.refreshInterval), "-d", "drm:/dev/dri/" + root.device.cardPath.split("/").pop()]
+    command: ["intel_gpu_top", "-c", "-s", String(root.refreshInterval), "-d", "drm:/dev/dri/" + root.device.cardPath.split("/").pop()]
     running: root.pollingEnabled && root.runtimeReady && !root.sleeping
       && root.device.vendor === "intel" && root.device.intelTool && !root.intelFailed
       && !root.intelRestarting
     stdout: SplitParser {
       onRead: function(data) {
-        var parsed = Gpu.consumeIntelJson(root.intelBuffer, data + "\n")
-        root.intelBuffer = parsed.buffer
-        for (var i = 0; i < parsed.objects.length; i++) {
-          var value = Gpu.parseIntel(parsed.objects[i])
-          if (value !== null) {
-            root.intelBusy = value
-            root.intelObservedAt = Date.now()
-            root.publish()
-          }
+        var line = String(data).trim()
+        if (line === "") return
+        // Take the header once per process; any later line with letters (nan, a
+        // warning) is skipped instead of wiping the columns.
+        if (Gpu.isIntelCsvHeader(line)) {
+          if (!root.intelColumns.length) root.intelColumns = Gpu.intelCsvColumns(line)
+          return
         }
+        var value = Gpu.parseIntelCsv(line, root.intelColumns)
+        if (value === null) return
+        root.intelBusy = value
+        root.intelObservedAt = Date.now()
+        root.publish()
       }
     }
     stderr: StdioCollector { waitForEnd: true }
     onExited: {
       root.intelFailed = root.pollingEnabled && !root.sleeping && !root.intelRestarting
-      root.intelBuffer = ""
+      root.intelColumns = []
       root.intelBusy = -1
       root.intelObservedAt = 0
       root.publish()

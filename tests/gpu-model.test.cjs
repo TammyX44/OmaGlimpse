@@ -62,16 +62,42 @@ test('selection wraps in both directions and survives reordering, removal and em
   assert.equal(gpu.cycleDevice([inventory[0]], id, 1), inventory[0].id)
 })
 
-test('incremental Intel JSON handles partial, nested and quoted data', () => {
-  let result = gpu.consumeIntelJson('', '[\n{"engines":{"Render/3D/0":{"busy":')
-  assert.equal(result.objects.length, 0)
-  result = gpu.consumeIntelJson(result.buffer, '15.5},"Video/0":{"busy":3}},"label":"a } \\" b"},\n{"engines":{"Render/3D/0":{"busy":0}}}')
-  assert.equal(result.objects.length, 2)
-  assert.equal(gpu.parseIntel(result.objects[0]), 15.5)
-  assert.equal(gpu.parseIntel(result.objects[1]), 0)
-  assert.equal(gpu.parseIntel({ engines: { Render: { busy: 'N/A' } } }), null)
-  assert.equal(gpu.parseIntel({ engines: { Render: null } }), null)
-  assert.equal(gpu.consumeIntelJson('{', 'x'.repeat(262144)).buffer, '')
+test('intel_gpu_top CSV: busy columns come from the header, not fixed positions', () => {
+  const header = 'Freq MHz req,Freq MHz act,IRQ /s,RC6 %,Power W gpu,Power W pkg,RCS %,RCS se,RCS wa,BCS %,BCS se,BCS wa,VCS %,VCS se,VCS wa,VECS %,VECS se,VECS wa'
+  const columns = gpu.intelCsvColumns(header)
+  assert.deepEqual(columns, [6, 9, 12, 15])
+  assert.equal(gpu.isIntelCsvHeader(header), true)
+  assert.equal(gpu.isIntelCsvHeader('473.446184,10.940983,118.361546,74.337066'), false)
+  const row = '473.446184,10.940983,118.361546,74.337066,0.370378,15.320497,1.410807,0.000000,0.000000,7.250000,0,0,0.000000,0,0,3.000000,0,0\r'
+  assert.equal(gpu.parseIntelCsv(row, columns), 7.25)
+  assert.equal(gpu.parseIntelCsv('  ' + row + '  ', columns), 7.25)
+  // RC6 residency is high when the GPU is idle; it must never count as load.
+  assert.equal(gpu.parseIntelCsv('0,0,0,99.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0', columns), 0)
+  assert.equal(gpu.parseIntelCsv('0,0,0,0,0,0,250,0,0,0,0,0,0,0,0,0,0,0', columns), 100)
+})
+
+test('intel_gpu_top CSV: physical-engine names from -p and other GPUs', () => {
+  const columns = gpu.intelCsvColumns('Freq MHz req,RC6 %,Power W gpu,RCS/0 %,RCS/0 se,CCS/0 %,CCS/0 se,VCS/1 %\r')
+  assert.deepEqual(columns, [3, 5, 7])
+  assert.equal(gpu.parseIntelCsv('300,50,1.2,4,0,18.5,0,9', columns), 18.5)
+  assert.deepEqual(gpu.intelCsvColumns('CCS %,RC6 %'), [0])
+  assert.deepEqual(gpu.intelCsvColumns('rc6 %,RCS %'), [1])
+})
+
+test('intel_gpu_top CSV: malformed rows and header-only streams yield nothing', () => {
+  const columns = gpu.intelCsvColumns('RC6 %,RCS %,BCS %')
+  assert.equal(gpu.parseIntelCsv('74,N/A,3', columns), null)
+  assert.equal(gpu.parseIntelCsv('74,5', columns), null)
+  assert.equal(gpu.parseIntelCsv('74,,3', columns), null)
+  assert.equal(gpu.parseIntelCsv('74,-1,3', columns), null)
+  assert.equal(gpu.parseIntelCsv('', columns), null)
+  assert.equal(gpu.parseIntelCsv(undefined, columns), null)
+  // Header only: no busy columns at all, so a row can never become a reading.
+  assert.deepEqual(gpu.intelCsvColumns('Freq MHz req,RC6 %,Power W gpu'), [])
+  assert.deepEqual(gpu.intelCsvColumns(''), [])
+  assert.equal(gpu.parseIntelCsv('473,74,0.3', gpu.intelCsvColumns('Freq MHz req,RC6 %,Power W gpu')), null)
+  assert.equal(gpu.parseIntelCsv('473,74,0.3', []), null)
+  assert.equal(gpu.parseIntelCsv('473,74,0.3', undefined), null)
 })
 
 test('GPU preferences migrate safely, preserve aliases and reject malformed values', () => {
