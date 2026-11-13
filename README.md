@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 3.3.0" src="https://img.shields.io/badge/version-3.3.0-blue">
+  <img alt="Version 3.3.1" src="https://img.shields.io/badge/version-3.3.1-blue">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Omarchy plugin" src="https://img.shields.io/badge/Omarchy-plugin-orange">
   <img alt="Quickshell and QML" src="https://img.shields.io/badge/Quickshell-QML-lightgrey">
