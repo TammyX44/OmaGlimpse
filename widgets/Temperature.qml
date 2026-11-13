@@ -65,9 +65,22 @@ BorderSurface {
   property real animatedHottestTemp: 0
   property bool tempSampleReady: false
   property string hottestSensor: ""
-  Behavior on animatedHottestTemp {
-    enabled: root.tempSampleReady
-    NumberAnimation { duration: 280; easing.type: Easing.OutCubic }
+  // Only a jump of a few degrees sweeps; each animated frame redraws the
+  // whole layer-shell window, so ordinary sensor jitter snaps instead.
+  readonly property real tempAnimateThreshold: 3
+  NumberAnimation {
+    id: tempSweep
+    target: root
+    property: "animatedHottestTemp"
+    duration: 280
+    easing.type: Easing.OutCubic
+  }
+  function setAnimatedTemp(value) {
+    tempSweep.stop()
+    if (root.tempSampleReady && Math.abs(value - root.animatedHottestTemp) >= root.tempAnimateThreshold) {
+      tempSweep.to = value
+      tempSweep.start()
+    } else root.animatedHottestTemp = value
   }
   property int fanRpm: -1
   property bool fanChecked: false
@@ -120,12 +133,13 @@ BorderSurface {
     }
     if (max === -Infinity) {
       root.tempSampleReady = false
+      tempSweep.stop()
       root.animatedHottestTemp = 0
       root.hottestTemp = 0
       root.hottestSensor = ""
       return
     }
-    root.animatedHottestTemp = max
+    root.setAnimatedTemp(max)
     root.tempSampleReady = true
     root.hottestTemp = max
     root.hottestSensor = maxName

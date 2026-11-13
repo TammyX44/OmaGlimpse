@@ -28,9 +28,15 @@ Item {
   property color labelColor: textColor    // override label color (e.g. semantic)
   property real labelSpacing: 8           // gap between gauge and label
   property bool animateValue: true
+  // Sample-to-sample jitter snaps; only a jump of at least this many points
+  // sweeps. Every animated frame redraws the whole layer-shell window.
+  property real animateThreshold: 8
   property bool showLabel: true
 
-  readonly property real fraction: Math.max(0, Math.min(1, value / 100))
+  // What is drawn: follows `value`, either snapping or sweeping (see onValueChanged).
+  property real displayedValue: 0
+  property bool valueSeen: false
+  readonly property real fraction: Math.max(0, Math.min(1, displayedValue / 100))
   readonly property real arcRadius: diameter / 2 - arcWidth - 2
   readonly property real startAngle: 270
   readonly property real sweepAngle: 360
@@ -39,10 +45,29 @@ Item {
   height: diameter + (showLabel ? labelSpacing + gaugeLabel.implicitHeight : 0)
     + (subLabel !== "" ? T.spacing.xs + gaugeDetail.implicitHeight : 0)
 
-  Behavior on value {
-    enabled: gauge.animateValue
-    NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+  NumberAnimation {
+    id: sweep
+    target: gauge
+    property: "displayedValue"
+    duration: 250
+    easing.type: Easing.OutCubic
   }
+
+  function syncDisplayed() {
+    sweep.stop()
+    // The first real value (the gauge starts at 0 before data arrives) snaps.
+    if (gauge.valueSeen && gauge.animateValue
+        && Math.abs(gauge.value - gauge.displayedValue) >= gauge.animateThreshold) {
+      sweep.to = gauge.value
+      sweep.start()
+    } else {
+      gauge.displayedValue = gauge.value
+    }
+    if (gauge.value !== 0) gauge.valueSeen = true
+  }
+
+  onValueChanged: syncDisplayed()
+  Component.onCompleted: { gauge.displayedValue = gauge.value; gauge.valueSeen = gauge.value !== 0 }
 
   Shape {
     id: shape
@@ -132,7 +157,7 @@ Item {
     verticalAlignment: Text.AlignVCenter
     fontSizeMode: Text.Fit
     textFormat: Text.PlainText
-    text: gauge.displayText !== "" ? gauge.displayText : (Math.round(gauge.value) + "%")
+    text: gauge.displayText !== "" ? gauge.displayText : (Math.round(gauge.displayedValue) + "%")
     minimumPixelSize: 9
     color: gauge.textColor
     font.family: Style.font.family

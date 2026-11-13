@@ -40,13 +40,18 @@ Item {
       memTotal: root.memTotal < 0 ? null : root.memTotal, observedAt: Date.now() })
   }
 
+  // A refresh reloads up to four files, each finishing in its own event-loop
+  // turn. Wait a few ms after the first one so a refresh publishes once,
+  // with every value that landed in the meantime, instead of up to five times.
+  function schedulePublish() { if (!publishTimer.running) publishTimer.start() }
+
   function readMetrics() {
     if (!root.pollingEnabled || root.sleeping) return
     if (root.device.tempPath) tempFile.reload()
     if (root.device.busyPath) busyFile.reload()
     if (root.device.memUsedPath) usedFile.reload()
     if (root.device.memTotalPath) totalFile.reload()
-    root.publish()
+    root.schedulePublish()
   }
 
   function refresh() {
@@ -74,7 +79,7 @@ Item {
       if (root.sleeping) {
         root.busy = root.temperature = root.memUsed = root.memTotal = root.intelBusy = -1
         root.intelObservedAt = 0
-        root.publish()
+        root.schedulePublish()
       } else root.readMetrics()
     }
     onLoadFailed: { root.runtimeReady = true; root.sleeping = false; root.readMetrics() }
@@ -83,29 +88,29 @@ Item {
     id: busyFile
     path: root.pollingEnabled && root.runtimeReady && !root.sleeping ? root.device.busyPath : ""
     watchChanges: false; printErrors: false
-    onLoaded: { root.busy = root.number(text(), 1); root.publish() }
-    onLoadFailed: { root.busy = -1; root.publish() }
+    onLoaded: { root.busy = root.number(text(), 1); root.schedulePublish() }
+    onLoadFailed: { root.busy = -1; root.schedulePublish() }
   }
   FileView {
     id: tempFile
     path: root.pollingEnabled && root.runtimeReady && !root.sleeping ? root.device.tempPath : ""
     watchChanges: false; printErrors: false
-    onLoaded: { root.temperature = root.number(text(), 1000); root.publish() }
-    onLoadFailed: { root.temperature = -1; root.publish() }
+    onLoaded: { root.temperature = root.number(text(), 1000); root.schedulePublish() }
+    onLoadFailed: { root.temperature = -1; root.schedulePublish() }
   }
   FileView {
     id: usedFile
     path: root.pollingEnabled && root.runtimeReady && !root.sleeping ? root.device.memUsedPath : ""
     watchChanges: false; printErrors: false
-    onLoaded: { root.memUsed = root.number(text(), 1024 * 1024); root.publish() }
-    onLoadFailed: { root.memUsed = -1; root.publish() }
+    onLoaded: { root.memUsed = root.number(text(), 1024 * 1024); root.schedulePublish() }
+    onLoadFailed: { root.memUsed = -1; root.schedulePublish() }
   }
   FileView {
     id: totalFile
     path: root.pollingEnabled && root.runtimeReady && !root.sleeping ? root.device.memTotalPath : ""
     watchChanges: false; printErrors: false
-    onLoaded: { root.memTotal = root.number(text(), 1024 * 1024); root.publish() }
-    onLoadFailed: { root.memTotal = -1; root.publish() }
+    onLoaded: { root.memTotal = root.number(text(), 1024 * 1024); root.schedulePublish() }
+    onLoadFailed: { root.memTotal = -1; root.schedulePublish() }
   }
 
   Process {
@@ -128,7 +133,7 @@ Item {
         if (value === null) return
         root.intelBusy = value
         root.intelObservedAt = Date.now()
-        root.publish()
+        root.schedulePublish()
       }
     }
     stderr: StdioCollector { waitForEnd: true }
@@ -137,9 +142,15 @@ Item {
       root.intelColumns = []
       root.intelBusy = -1
       root.intelObservedAt = 0
-      root.publish()
+      root.schedulePublish()
       root.intelRestarting = false
     }
+  }
+  Timer {
+    id: publishTimer
+    interval: 30
+    repeat: false
+    onTriggered: root.publish()
   }
   Timer {
     interval: root.refreshInterval
